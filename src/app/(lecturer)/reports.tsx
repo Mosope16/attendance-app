@@ -9,6 +9,7 @@ import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import { exportCsv } from '../../lib/exportCsv';
+import { formatDate, formatTime } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
@@ -112,8 +113,8 @@ export default function ReportsScreen() {
 
     try {
       setExporting(true);
-      const dateStr = new Date().toISOString().split('T')[0];
-      const timeStr = new Date().toLocaleTimeString();
+      const dateStr = formatDate(new Date(), { showDay: false, showYear: true });
+      const timeStr = formatTime(new Date());
 
       const onTrackCount = studentStats.filter((s) => s.attendance >= 75).length;
       const atRiskCount = studentStats.filter((s) => s.attendance < 75).length;

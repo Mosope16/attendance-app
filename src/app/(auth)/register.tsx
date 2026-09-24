@@ -84,7 +84,7 @@ export default function RegisterScreen() {
       contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 16 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <StatusBar style={isDark ? "light" : "dark"} backgroundColor={colors.bg} translucent={false} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       {/* Logo */}
       <View style={s.logoContainer}>
         <View style={[s.logoRing, { borderColor: themeColor }]}>

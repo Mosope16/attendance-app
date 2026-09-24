@@ -1,21 +1,25 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CheckCircle } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { formatDate, formatTime } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
 export default function AttendanceSuccessScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { colors, isDark } = useTheme();
   const PRIMARY = colors.primary;
   const s = makeStyles(colors);
 
+  const displayDate = params.timestamp ? params.timestamp : new Date();
+
   return (
     <View style={s.root}>
-      <StatusBar style={isDark ? "light" : "dark"} backgroundColor={colors.bg} translucent={false} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <View style={s.iconBlock}>
         <CheckCircle size={80} color={PRIMARY} />
       </View>
@@ -27,8 +31,8 @@ export default function AttendanceSuccessScreen() {
 
       <View style={s.detailCard}>
         {[
-          { label: 'Date', value: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) },
-          { label: 'Time', value: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) },
+          { label: 'Date', value: formatDate(displayDate, { showDay: true, showYear: true }) },
+          { label: 'Time', value: formatTime(displayDate) },
           { label: 'Status', value: '✓ Present' },
         ].map((item) => (
           <View key={item.label} style={s.detailRow}>

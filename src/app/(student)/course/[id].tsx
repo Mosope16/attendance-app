@@ -6,27 +6,13 @@ import { StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useUser } from '../../../context/AuthContext';
 import { useSupabaseClient } from '../../../lib/supabase';
-import { ChevronLeft, CheckCircle, XCircle, Clock } from 'lucide-react-native';
+import { ChevronLeft, CheckCircle, XCircle, Clock, MapPin } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
-import * as Location from 'expo-location';
+import { formatDate, formatTime } from '../../../lib/dateUtils';
+import { getCurrentAttendanceLocation, validateGeofenceProximity } from '../../../lib/geo';
 
 const ff = Platform.OS === 'android';
-
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371e3; // metres
-  const p1 = lat1 * Math.PI/180;
-  const p2 = lat2 * Math.PI/180;
-  const dp = (lat2-lat1) * Math.PI/180;
-  const dl = (lon2-lon1) * Math.PI/180;
-
-  const a = Math.sin(dp/2) * Math.sin(dp/2) +
-            Math.cos(p1) * Math.cos(p2) *
-            Math.sin(dl/2) * Math.sin(dl/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  return R * c;
-}
 
 export default function StudentCourseDetails() {
   const { id } = useLocalSearchParams();
@@ -53,6 +39,27 @@ export default function StudentCourseDetails() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Real-time listener: refresh history automatically when attendance is recorded
+  useEffect(() => {
+    if (!id || !user?.id) return;
+    const channel = supabase
+      .channel(`student_course_attendance_${id}_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        (payload: any) => {
+          if (payload?.new?.student_id === user.id) {
+            fetchAttendanceHistory();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, user?.id, supabase]);
+
   const fetchCourseDetails = async () => {
     const { data } = await supabase.from('courses').select('*').eq('id', id).single();
     if (data) setCourse(data);
@@ -73,25 +80,6 @@ export default function StudentCourseDetails() {
     setSubmitting(true);
     setMessage({ text: '', type: '' });
 
-    // 1. Get student location
-    let studentLat = null;
-    let studentLon = null;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setMessage({ text: 'Location access required for attendance.', type: 'error' });
-        setSubmitting(false);
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      studentLat = location.coords.latitude;
-      studentLon = location.coords.longitude;
-    } catch (err) {
-      setMessage({ text: 'Could not get your location.', type: 'error' });
-      setSubmitting(false);
-      return;
-    }
-
     const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
@@ -107,11 +95,25 @@ export default function StudentCourseDetails() {
       return;
     }
 
-    // 2. Verify Geo-fence (50 meters)
-    if (session.latitude && session.longitude && studentLat && studentLon) {
-      const distance = getDistance(studentLat, studentLon, session.latitude, session.longitude);
-      if (distance > 50) {
-        setMessage({ text: `Too far from class (${Math.round(distance)}m away).`, type: 'error' });
+    // Geofencing verification (50 meters radius)
+    if (session.latitude != null && session.longitude != null) {
+      const locResult = await getCurrentAttendanceLocation();
+      if (locResult.error || !locResult.coords) {
+        setMessage({ text: locResult.error || 'Location access is required to verify your attendance.', type: 'error' });
+        setSubmitting(false);
+        return;
+      }
+
+      const geo = validateGeofenceProximity(
+        locResult.coords.latitude,
+        locResult.coords.longitude,
+        session.latitude,
+        session.longitude,
+        50
+      );
+
+      if (!geo.isWithin) {
+        setMessage({ text: geo.message, type: 'error' });
         setSubmitting(false);
         return;
       }
@@ -121,6 +123,7 @@ export default function StudentCourseDetails() {
       session_id: session.id,
       student_id: user.id,
       status: 'present',
+      timestamp: new Date().toISOString(),
     });
 
     if (recordError) {
@@ -174,6 +177,11 @@ export default function StudentCourseDetails() {
             Enter the 5-character code displayed by your lecturer.
           </Text>
 
+          <View style={s.geoBadge}>
+            <MapPin size={13} color={PRIMARY} />
+            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · 50m Radius</Text>
+          </View>
+
           {message.text ? (
             <View style={[s.messageBanner, message.type === 'error' ? s.errorBanner : s.successBanner]}>
               <Text style={[s.messageText, message.type === 'error' ? s.errorText : s.successText]}>
@@ -225,10 +233,10 @@ export default function StudentCourseDetails() {
                 </View>
                 <View style={s.historyInfo}>
                   <Text style={s.historyDate}>
-                    {new Date(record.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {formatDate(record.timestamp, { showDay: true, showYear: false })}
                   </Text>
                   <Text style={s.historyTime}>
-                    {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTime(record.timestamp)}
                   </Text>
                 </View>
                 <View style={[s.statusBadge, { backgroundColor: record.status === 'present' ? colors.primaryDim : '#FEE2E2' }]}>
@@ -274,7 +282,23 @@ function makeStyles(c: ReturnType<typeof import('../../../context/ThemeContext')
       borderWidth: 1, borderColor: c.cardBorder, marginBottom: 20,
       shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
     },
-    cardHint: { fontSize: 13, color: c.textSub, marginBottom: 14, lineHeight: 20, fontFamily: ff ? 'sans-serif' : undefined },
+    cardHint: { fontSize: 13, color: c.textSub, marginBottom: 10, lineHeight: 20, fontFamily: ff ? 'sans-serif' : undefined },
+    geoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.primaryDim,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      marginBottom: 14,
+      gap: 6,
+      alignSelf: 'flex-start',
+    },
+    geoBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
     messageBanner: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
     errorBanner: { backgroundColor: '#FEE2E2' },
     successBanner: { backgroundColor: '#D1FAE5' },

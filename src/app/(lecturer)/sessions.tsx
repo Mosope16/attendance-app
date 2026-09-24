@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { formatDate, formatTime } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
@@ -29,6 +30,32 @@ export default function SessionsScreen() {
       fetchSessions();
     }, [isDark, SECONDARY, user?.id])
   );
+
+  // Real-time listener: refresh session lists and live counts automatically
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel('lecturer_sessions_realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_sessions' },
+        () => {
+          fetchSessions();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        () => {
+          fetchSessions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase]);
 
   const fetchSessions = async () => {
     if (!user) return;
@@ -101,7 +128,7 @@ export default function SessionsScreen() {
                   </View>
                   <Text style={s.activeCode}>Code: {session.attendance_code}</Text>
                   <Text style={s.activeTime}>
-                    Ends {new Date(session.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    Ends {formatTime(session.end_time)}
                   </Text>
                 </View>
                 <View style={s.presentBox}>
@@ -131,7 +158,7 @@ export default function SessionsScreen() {
                     <View style={s.pastInfo}>
                       <Text style={s.pastCourse}>{session.course?.course_code}</Text>
                       <Text style={s.pastDate}>
-                        {new Date(session.start_time).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {formatDate(session.start_time, { showDay: true, showYear: false })} · {formatTime(session.start_time)}
                       </Text>
                     </View>
                     <View style={s.attendanceBadge}>

@@ -36,6 +36,39 @@ export default function LecturerDashboard() {
     }, [user])
   );
 
+  // Real-time listener: refresh lecturer dashboard stats live
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`lecturer_dashboard_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_sessions' },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'enrollments' },
+        () => {
+          fetchDashboardData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase]);
+
   const fetchDashboardData = async () => {
     if (!user) return;
     setLoading(true);
@@ -123,11 +156,7 @@ export default function LecturerDashboard() {
 
   return (
     <View style={s.root}>
-      <StatusBar
-        style="light"
-        backgroundColor={SECONDARY}
-        translucent={false}
-      />
+      <StatusBar style="light" />
       {/* Header */}
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
         <View style={s.headerTop}>

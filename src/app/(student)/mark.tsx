@@ -5,11 +5,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { ScanLine, ChevronLeft, Hash, Camera, X, CheckCircle } from 'lucide-react-native';
+import { ScanLine, ChevronLeft, Hash, Camera, X, CheckCircle, MapPin } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { getCurrentAttendanceLocation, validateGeofenceProximity } from '../../lib/geo';
 import * as Haptics from 'expo-haptics';
 
 const ff = Platform.OS === 'android';
@@ -76,23 +77,53 @@ export default function MarkAttendanceScreen() {
     const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
-      .select('id, course_id')
+      .select('id, course_id, latitude, longitude')
       .eq('attendance_code', attendanceCode.toUpperCase())
       .gt('end_time', now)
       .single();
 
     if (sessionError || !session) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError('Invalid or expired code. Try again.');
+      setError('Invalid or expired attendance code. Please check and try again.');
       setLoading(false);
       setScanned(false);
       return;
     }
 
+    // ─── Proper Geofencing Validation ──────────────────────────────────
+    if (session.latitude != null && session.longitude != null) {
+      const locResult = await getCurrentAttendanceLocation();
+      if (locResult.error || !locResult.coords) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setError(locResult.error || 'Location access is required to verify your attendance.');
+        setLoading(false);
+        setScanned(false);
+        return;
+      }
+
+      const geo = validateGeofenceProximity(
+        locResult.coords.latitude,
+        locResult.coords.longitude,
+        session.latitude,
+        session.longitude,
+        50 // 50 meters classroom boundary
+      );
+
+      if (!geo.isWithin) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setError(geo.message);
+        setLoading(false);
+        setScanned(false);
+        return;
+      }
+    }
+
+    const recordTimestamp = new Date().toISOString();
     const { error: recordError } = await supabase.from('attendance_records').insert({
       session_id: session.id,
       student_id: user.id,
       status: 'present',
+      timestamp: recordTimestamp,
     });
 
     setLoading(false);
@@ -100,15 +131,20 @@ export default function MarkAttendanceScreen() {
     if (recordError) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       if (recordError.code === '23505') {
-        setError('You already marked attendance for this session.');
+        setError('You have already marked attendance for this session.');
       } else {
-        setError('Something went wrong. Please try again.');
+        setError('Something went wrong saving attendance. Please try again.');
       }
       setScanned(false);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSuccess('Attendance marked successfully!');
-      setTimeout(() => router.push('/(student)/attendance-success'), 1000);
+      setSuccess('Attendance verified & marked successfully!');
+      setTimeout(() => {
+        router.push({
+          pathname: '/(student)/attendance-success',
+          params: { timestamp: recordTimestamp },
+        });
+      }, 700);
     }
   };
 
@@ -184,13 +220,18 @@ export default function MarkAttendanceScreen() {
               <View style={[s.corner, s.bl]} />
               <View style={[s.corner, s.br]} />
             </Animated.View>
+
+            <View style={s.scanGeoBadge}>
+              <MapPin size={12} color="#FFFFFF" />
+              <Text style={s.scanGeoBadgeText}>GPS Geofence Protected · 50m Radius</Text>
+            </View>
           </View>
 
           {/* Bottom hint */}
           <View style={[s.scanBottom, { paddingBottom: Math.max(insets.bottom, 20) + 40 }]}>
             {loading ? (
               <View style={s.scanFeedback}>
-                <Text style={s.scanFeedbackText}>Verifying...</Text>
+                <Text style={s.scanFeedbackText}>Verifying location & code...</Text>
               </View>
             ) : success ? (
               <View style={[s.scanFeedback, { backgroundColor: '#059669' }]}>
@@ -236,6 +277,11 @@ export default function MarkAttendanceScreen() {
           <Text style={s.iconSub}>
             Enter the 5-character session code from your lecturer, or scan the QR code.
           </Text>
+
+          <View style={s.geoBadge}>
+            <MapPin size={13} color={PRIMARY} />
+            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · 50m Max Radius</Text>
+          </View>
         </View>
 
         {/* Feedback */}
@@ -299,10 +345,42 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     headerTitle: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     scroll: { flex: 1 },
     scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingBottom: 40 },
-    iconBlock: { alignItems: 'center', marginBottom: 32 },
+    iconBlock: { alignItems: 'center', marginBottom: 28 },
     iconCircle: { width: 96, height: 96, backgroundColor: c.primaryDim, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
     iconTitle: { fontSize: 24, fontWeight: '700', color: c.text, marginBottom: 10, fontFamily: ff ? 'sans-serif-medium' : undefined },
-    iconSub: { fontSize: 14, color: c.textSub, textAlign: 'center', lineHeight: 22, paddingHorizontal: 12, fontFamily: ff ? 'sans-serif' : undefined },
+    iconSub: { fontSize: 14, color: c.textSub, textAlign: 'center', lineHeight: 22, paddingHorizontal: 12, marginBottom: 14, fontFamily: ff ? 'sans-serif' : undefined },
+    geoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.primaryDim,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      gap: 6,
+    },
+    geoBadgeText: {
+      fontSize: 12,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    scanGeoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 999,
+      gap: 6,
+      marginTop: 20,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
+    },
+    scanGeoBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
     errorBox: { backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, marginBottom: 16 },
     errorText: { color: '#DC2626', textAlign: 'center', fontSize: 14, fontFamily: ff ? 'sans-serif' : undefined },
     successBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D1FAE5', padding: 12, borderRadius: 12, marginBottom: 16 },

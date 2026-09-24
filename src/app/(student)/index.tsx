@@ -10,6 +10,7 @@ import { Bell, BookOpen, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { parseSafeDate } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
@@ -39,6 +40,35 @@ export default function StudentDashboard() {
       return () => clearTimeout(timer);
     }, [user?.id, isDark, PRIMARY, checkActiveSessionsForEnrolledCourses])
   );
+
+  // Real-time listener: refresh stats when sessions open or attendance is marked
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`student_dashboard_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_sessions' },
+        () => {
+          fetchAll();
+          checkActiveSessionsForEnrolledCourses();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        (payload: any) => {
+          if (payload?.new?.student_id === user.id) {
+            fetchAll();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase, checkActiveSessionsForEnrolledCourses]);
 
   const fetchAll = async () => {
     if (!user) return;
@@ -86,7 +116,7 @@ export default function StudentDashboard() {
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
-    const thisWeek = records?.filter((r: any) => new Date(r.timestamp) >= weekStart).length ?? 0;
+    const thisWeek = records?.filter((r: any) => parseSafeDate(r.timestamp) >= weekStart).length ?? 0;
     setWeekCount(thisWeek);
 
     // Per-course stats

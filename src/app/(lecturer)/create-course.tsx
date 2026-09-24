@@ -59,7 +59,7 @@ export default function CreateCourseScreen() {
       contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 16 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <StatusBar style={isDark ? "light" : "dark"} backgroundColor={colors.bg} translucent={false} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       {/* Back */}
       <Pressable onPress={() => router.back()} style={s.backBtn}>
         <ChevronLeft size={22} color={colors.text} />

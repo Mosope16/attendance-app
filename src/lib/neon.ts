@@ -278,16 +278,122 @@ class QueryBuilder<T = any> implements PromiseLike<{ data: any; error: any; coun
   }
 }
 
+class RealtimeChannel {
+  private channelName: string;
+  private listeners: Array<{
+    eventType: string;
+    filter: { event?: string; schema?: string; table: string; filter?: string };
+    callback: (payload: any) => void;
+  }> = [];
+  private intervalId: any = null;
+  private seenRowKeys = new Map<string, Set<string>>();
+
+  constructor(channelName: string) {
+    this.channelName = channelName;
+  }
+
+  on(
+    eventType: string,
+    filter: { event?: string; schema?: string; table: string; filter?: string },
+    callback: (payload: any) => void
+  ) {
+    this.listeners.push({ eventType, filter, callback });
+    return this;
+  }
+
+  subscribe() {
+    this.startPolling();
+    return {
+      unsubscribe: () => this.unsubscribe(),
+    };
+  }
+
+  unsubscribe() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.seenRowKeys.clear();
+  }
+
+  private async poll() {
+    for (let i = 0; i < this.listeners.length; i++) {
+      const listener = this.listeners[i];
+      const table = listener.filter.table;
+      if (!table) continue;
+
+      let whereClause = '';
+      if (listener.filter.filter) {
+        const parts = listener.filter.filter.split('=eq.');
+        if (parts.length === 2) {
+          const col = parts[0].trim();
+          const val = parts[1].trim();
+          whereClause = `WHERE "${col}" = '${val}'`;
+        }
+      }
+
+      const sql = `SELECT * FROM public.${table} ${whereClause} ORDER BY 1 DESC LIMIT 100;`;
+      const res = await executeSql(sql);
+
+      if (!res.data) continue;
+
+      let seen = this.seenRowKeys.get(String(i));
+      if (!seen) {
+        seen = new Set<string>();
+        this.seenRowKeys.set(String(i), seen);
+        for (const row of res.data) {
+          const key = row.id || `${row.session_id}_${row.student_id}`;
+          seen.add(String(key));
+        }
+        continue;
+      }
+
+      for (const row of res.data) {
+        const key = String(row.id || `${row.session_id}_${row.student_id}`);
+        if (!seen.has(key)) {
+          seen.add(key);
+          try {
+            listener.callback({
+              eventType: 'INSERT',
+              new: row,
+              old: null,
+              table,
+            });
+          } catch (e) {
+            console.warn('Realtime callback error:', e);
+          }
+        }
+      }
+    }
+  }
+
+  private startPolling() {
+    this.poll();
+    if (!this.intervalId) {
+      this.intervalId = setInterval(() => {
+        this.poll();
+      }, 2500);
+    }
+  }
+}
+
+const activeChannels = new Map<string, RealtimeChannel>();
+
 export const db = {
   from: (tableName: string) => new QueryBuilder(tableName),
-  channel: (name: string) => ({
-    on: (_type: string, _filter: any, _callback: (payload: any) => void) => ({
-      subscribe: () => ({ unsubscribe: () => {} }),
-    }),
-    subscribe: () => ({ unsubscribe: () => {} }),
-    unsubscribe: () => {},
-  }),
-  removeChannel: (_channel: any) => {},
+  channel: (name: string) => {
+    let chan = activeChannels.get(name);
+    if (!chan) {
+      chan = new RealtimeChannel(name);
+      activeChannels.set(name, chan);
+    }
+    return chan;
+  },
+  removeChannel: (channel: any) => {
+    if (channel && typeof channel.unsubscribe === 'function') {
+      channel.unsubscribe();
+    }
+  },
 };
 
 export const useNeonClient = () => db;

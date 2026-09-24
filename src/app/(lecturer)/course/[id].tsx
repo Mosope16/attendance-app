@@ -6,15 +6,16 @@ import { StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useUser } from '../../../context/AuthContext';
 import { useSupabaseClient } from '../../../lib/supabase';
-import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download } from 'lucide-react-native';
+import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download, MapPin } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import * as Location from 'expo-location';
 import { exportCsv } from '../../../lib/exportCsv';
 import QRCode from 'react-native-qrcode-svg';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
+import { formatDate, formatTime } from '../../../lib/dateUtils';
+import { getCurrentAttendanceLocation } from '../../../lib/geo';
 
 const ff = Platform.OS === 'android';
 
@@ -138,23 +139,20 @@ export default function LecturerCourseDetails() {
   }, [id, supabase]);
 
   const startSession = async () => {
-    let latitude = null;
-    let longitude = null;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
 
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location access is required to use Geo-fencing for attendance.');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      latitude = location.coords.latitude;
-      longitude = location.coords.longitude;
-    } catch (err) {
-      Alert.alert('Location Error', 'Could not get your location. Please ensure location services are enabled.');
+    const locResult = await getCurrentAttendanceLocation();
+    if (locResult.error || !locResult.coords) {
+      Alert.alert(
+        'GPS Location Required',
+        locResult.error || 'Location access is required so students within the lecture hall geofence can mark attendance.'
+      );
       return;
     }
+
+    latitude = locResult.coords.latitude;
+    longitude = locResult.coords.longitude;
 
     const code = Math.random().toString(36).substring(2, 7).toUpperCase();
     const endTime = new Date(Date.now() + 10 * 60000).toISOString();
@@ -187,8 +185,8 @@ export default function LecturerCourseDetails() {
 
     try {
       setExporting(true);
-      const dateStr = new Date().toISOString().split('T')[0];
-      const timeStr = new Date().toLocaleTimeString();
+      const dateStr = formatDate(new Date(), { showDay: false, showYear: true });
+      const timeStr = formatTime(new Date());
 
       const rows: (string | number)[][] = [
         ['SMARTATTEND COURSE ATTENDANCE SHEET'],
@@ -201,8 +199,8 @@ export default function LecturerCourseDetails() {
       if (activeSession) {
         rows.push(['Session Status', 'ACTIVE LIVE SESSION']);
         rows.push(['Attendance PIN Code', activeSession.attendance_code || 'N/A']);
-        rows.push(['Session Opened', new Date(activeSession.start_time).toLocaleTimeString()]);
-        rows.push(['Session Closes', new Date(activeSession.end_time).toLocaleTimeString()]);
+        rows.push(['Session Opened', formatTime(activeSession.start_time)]);
+        rows.push(['Session Closes', formatTime(activeSession.end_time)]);
         rows.push(['Total Enrolled', students.length]);
         rows.push(['Total Marked Present', presentStudentIds.size]);
         rows.push(['Total Absent', Math.max(0, students.length - presentStudentIds.size)]);
@@ -342,9 +340,16 @@ export default function LecturerCourseDetails() {
             <View style={s.timeRow}>
               <Clock size={14} color={colors.textMuted} />
               <Text style={s.timeText}>
-                Ends {new Date(activeSession.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                Ends {formatTime(activeSession.end_time)}
               </Text>
             </View>
+
+            {activeSession.latitude && activeSession.longitude ? (
+              <View style={s.geoBadge}>
+                <MapPin size={13} color={SECONDARY} />
+                <Text style={[s.geoBadgeText, { color: SECONDARY }]}>Geofence Active · 50m Radius</Text>
+              </View>
+            ) : null}
           </View>
         ) : (
           <View style={s.card}>
@@ -469,6 +474,21 @@ function makeStyles(c: ReturnType<typeof import('../../../context/ThemeContext')
     codeValue: { fontSize: 38, fontWeight: '900', letterSpacing: 10, marginBottom: 8, fontFamily: ff ? 'sans-serif-medium' : undefined },
     timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     timeText: { fontSize: 13, color: c.textMuted, fontFamily: ff ? 'sans-serif' : undefined },
+    geoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.secondaryDim,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      marginTop: 10,
+      gap: 6,
+    },
+    geoBadgeText: {
+      fontSize: 12,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
     qrBox: { marginVertical: 14, padding: 12, borderRadius: 16, borderWidth: 1, backgroundColor: c.card },
     qrHint: { fontSize: 12, color: c.textMuted, textAlign: 'center', marginBottom: 8, fontFamily: ff ? 'sans-serif' : undefined },
 

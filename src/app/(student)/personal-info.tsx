@@ -84,7 +84,7 @@ export default function StudentPersonalInfoScreen() {
       contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 12 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <StatusBar style="light" backgroundColor={isDark ? '#0D3320' : PRIMARY} translucent={false} />
+      <StatusBar style="light" />
       
       {/* Header */}
       <View style={s.header}>

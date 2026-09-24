@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { formatDateTime, parseSafeDate } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
@@ -27,6 +28,27 @@ export default function HistoryScreen() {
     }, [isDark, PRIMARY, user?.id])
   );
 
+  // Real-time listener: refresh automatically when attendance is recorded
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`student_history_records_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_records' },
+        (payload: any) => {
+          if (payload?.new?.student_id === user.id) {
+            fetchHistory();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase]);
+
   const fetchHistory = async () => {
     if (!user) return;
     setLoading(true);
@@ -38,7 +60,7 @@ export default function HistoryScreen() {
         .select('course_id')
         .eq('student_id', user.id);
       
-      const courseIds = enrollments?.map(e => e.course_id) || [];
+      const courseIds = enrollments?.map((e: any) => e.course_id) || [];
 
       if (courseIds.length === 0) {
         setRecords([]);
@@ -49,7 +71,7 @@ export default function HistoryScreen() {
       // 2. Get all sessions for these courses
       const { data: sessionData } = await supabase
         .from('attendance_sessions')
-        .select('id, created_at, end_time, course:course_id ( course_code, course_title )')
+        .select('id, start_time, end_time, course:course_id ( course_code, course_title )')
         .in('course_id', courseIds);
       
       const sessions = sessionData || [];
@@ -87,8 +109,8 @@ export default function HistoryScreen() {
         }
       }
 
-      // Sort history by timestamp descending (newest first)
-      history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // Sort history by timestamp descending (newest first) safely
+      history.sort((a, b) => parseSafeDate(b.timestamp).getTime() - parseSafeDate(a.timestamp).getTime());
 
       setRecords(history);
     } catch (error) {
@@ -148,9 +170,7 @@ export default function HistoryScreen() {
                   <View style={s.sessionInfo}>
                     <Text style={s.sessionCourse}>{course?.course_code ?? 'Unknown'}</Text>
                     <Text style={s.sessionDate}>
-                      {new Date(record.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                      {' · '}
-                      {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatDateTime(record.timestamp)}
                     </Text>
                   </View>
                   <View style={[s.statusBadge, { backgroundColor: isPresent ? colors.primaryDim : (isDark ? '#450a0a' : '#FEF2F2') }]}>

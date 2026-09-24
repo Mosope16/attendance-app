@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { BellRing, BookOpen, Bell } from 'lucide-react-native';
@@ -10,23 +10,9 @@ import { useSupabaseClient } from '../../lib/supabase';
 import { useNotifications } from '../../context/NotificationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pressable } from 'react-native';
+import { formatRelativeTime, parseSafeDate } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
-
-function timeAgo(date: Date) {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  let interval = seconds / 31536000;
-  if (interval > 1) return Math.floor(interval) + " years ago";
-  interval = seconds / 2592000;
-  if (interval > 1) return Math.floor(interval) + " months ago";
-  interval = seconds / 86400;
-  if (interval > 1) return Math.floor(interval) + " days ago";
-  interval = seconds / 3600;
-  if (interval > 1) return Math.floor(interval) + " hours ago";
-  interval = seconds / 60;
-  if (interval > 1) return Math.floor(interval) + " mins ago";
-  return "Just now";
-}
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -50,6 +36,32 @@ export default function NotificationsScreen() {
       };
     }, [user?.id])
   );
+
+  // Real-time listener: refresh notifications automatically
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`notifications_realtime_${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'attendance_sessions' },
+        () => {
+          fetchNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'enrollments' },
+        () => {
+          fetchNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, supabase]);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -83,13 +95,13 @@ export default function NotificationsScreen() {
 
       for (const e of (enrollments ?? [])) {
         if (!e.course) continue;
-        const date = new Date(e.joined_at);
+        const date = parseSafeDate(e.joined_at);
         notifs.push({
           id: `enroll_${e.course_id}`,
           title: 'Course Enrolled',
           message: `You successfully joined ${e.course.course_code}.`,
           timeObj: date,
-          time: timeAgo(date),
+          time: formatRelativeTime(date),
           unread: date > lastRead,
           icon: 'book'
         });
@@ -97,13 +109,13 @@ export default function NotificationsScreen() {
 
       for (const s of sessions) {
         if (!s.course) continue;
-        const date = new Date(s.start_time);
+        const date = parseSafeDate(s.start_time);
         notifs.push({
           id: `session_${s.id}`,
           title: 'Attendance Session Started',
           message: `${s.course.course_code} session is now active.`,
           timeObj: date,
-          time: timeAgo(date),
+          time: formatRelativeTime(date),
           unread: date > lastRead,
           icon: 'bell'
         });
@@ -124,7 +136,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={s.root}>
-      <StatusBar style="light" backgroundColor={PRIMARY} translucent={false} />
+      <StatusBar style="light" />
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
         <Text style={s.headerTitle}>Notifications</Text>
         <View style={s.badgePill}>

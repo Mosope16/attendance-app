@@ -84,7 +84,7 @@ export default function LecturerPersonalInfoScreen() {
       contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 12 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <StatusBar style="light" backgroundColor={isDark ? '#071A40' : SECONDARY} translucent={false} />
+      <StatusBar style="light" />
       
       {/* Header */}
       <View style={s.header}>

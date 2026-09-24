@@ -44,7 +44,7 @@ export default function CoursesScreen() {
 
   return (
     <View style={s.root}>
-      <StatusBar style="light" backgroundColor={isDark ? '#071A40' : SECONDARY} translucent={false} />
+      <StatusBar style="light" />
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
         <Text style={s.headerTitle}>All Courses</Text>
         <Pressable
