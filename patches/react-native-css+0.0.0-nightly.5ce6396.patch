@@ -1,0 +1,94 @@
+diff --git a/node_modules/react-native-css/dist/commonjs/metro/index.js b/node_modules/react-native-css/dist/commonjs/metro/index.js
+index 998b303..ca16046 100644
+--- a/node_modules/react-native-css/dist/commonjs/metro/index.js
++++ b/node_modules/react-native-css/dist/commonjs/metro/index.js
+@@ -128,6 +128,15 @@ function withReactNativeCSS(config, options) {
+                     hexColors: options?.hexColors
+                   }).stylesheet()]);
+                   watcher.emit("change", {
++                    rootDir: "",
++                    changes: {
++                      addedFiles: new Map(),
++                      modifiedFiles: new Map(nativeInjectionFilepaths.map(filePath => [
++                        filePath,
++                        { modifiedTime: Date.now(), size: 1, type: "virtual" }
++                      ])),
++                      removedFiles: new Map(),
++                    },
+                     eventsQueue: nativeInjectionFilepaths.map(filePath => ({
+                       filePath,
+                       metadata: {
+@@ -152,7 +161,7 @@ function withReactNativeCSS(config, options) {
+               } else if (nativeInjectionFilepaths.includes(filePath)) {
+                 // If this is the injection file, we to swap its content with the
+                 // compiled CSS files
+-                fileBuffer = (0, _injectionCode.getNativeInjectionCode)(Array.from(nativeCSSFiles.keys()).map(key => (0, _nodePath.relative)((0, _nodePath.dirname)(filePath), key)), Array.from(nativeCSSFiles.values()).map(([, value]) => value));
++                fileBuffer = (0, _injectionCode.getNativeInjectionCode)(Array.from(nativeCSSFiles.keys()).map(key => (0, _nodePath.relative)((0, _nodePath.dirname)(filePath), key).replace(/\\/g, '/')), Array.from(nativeCSSFiles.values()).map(([, value]) => value));
+                 if (loggerEnabled && fileBuffer) {
+                   logger(`Transformed ${filePath}`);
+                   logger(fileBuffer?.toString());
+diff --git a/node_modules/react-native-css/dist/commonjs/metro/injection-code.js b/node_modules/react-native-css/dist/commonjs/metro/injection-code.js
+index aa5e077..45aa002 100644
+--- a/node_modules/react-native-css/dist/commonjs/metro/injection-code.js
++++ b/node_modules/react-native-css/dist/commonjs/metro/injection-code.js
+@@ -16,11 +16,11 @@ exports.getWebInjectionCode = getWebInjectionCode;
+  * To fix this, we force our code to always import the CSS files, so now the CSS files are in every bundle.
+  */
+ function getWebInjectionCode(filePaths) {
+-  const importStatements = filePaths.map(filePath => `import "${filePath}";`).join("\n");
++  const importStatements = filePaths.map(filePath => `import "${filePath.replace(/\\/g, '/')}";`).join("\n");
+   return Buffer.from(importStatements);
+ }
+ function getNativeInjectionCode(cssFilePaths, values) {
+-  const importStatements = cssFilePaths.map(filePath => `import "${filePath}";`).join("\n");
++  const importStatements = cssFilePaths.map(filePath => `import "${filePath.replace(/\\/g, '/')}";`).join("\n");
+   const contents = values.map(value => `StyleCollection.inject(${JSON.stringify(value)});`).join("\n");
+   return Buffer.from(`import { StyleCollection } from "react-native-css/style-collection";\n${importStatements}\n${contents};export {};`);
+ }
+diff --git a/node_modules/react-native-css/dist/module/metro/index.js b/node_modules/react-native-css/dist/module/metro/index.js
+index e282f55..e1c139c 100644
+--- a/node_modules/react-native-css/dist/module/metro/index.js
++++ b/node_modules/react-native-css/dist/module/metro/index.js
+@@ -122,6 +122,15 @@ export function withReactNativeCSS(config, options) {
+                     hexColors: options?.hexColors
+                   }).stylesheet()]);
+                   watcher.emit("change", {
++                    rootDir: "",
++                    changes: {
++                      addedFiles: new Map(),
++                      modifiedFiles: new Map(nativeInjectionFilepaths.map(filePath => [
++                        filePath,
++                        { modifiedTime: Date.now(), size: 1, type: "virtual" }
++                      ])),
++                      removedFiles: new Map(),
++                    },
+                     eventsQueue: nativeInjectionFilepaths.map(filePath => ({
+                       filePath,
+                       metadata: {
+@@ -146,7 +155,7 @@ export function withReactNativeCSS(config, options) {
+               } else if (nativeInjectionFilepaths.includes(filePath)) {
+                 // If this is the injection file, we to swap its content with the
+                 // compiled CSS files
+-                fileBuffer = getNativeInjectionCode(Array.from(nativeCSSFiles.keys()).map(key => relative(dirname(filePath), key)), Array.from(nativeCSSFiles.values()).map(([, value]) => value));
++                fileBuffer = getNativeInjectionCode(Array.from(nativeCSSFiles.keys()).map(key => relative(dirname(filePath), key).replace(/\\/g, '/')), Array.from(nativeCSSFiles.values()).map(([, value]) => value));
+                 if (loggerEnabled && fileBuffer) {
+                   logger(`Transformed ${filePath}`);
+                   logger(fileBuffer?.toString());
+diff --git a/node_modules/react-native-css/dist/module/metro/injection-code.js b/node_modules/react-native-css/dist/module/metro/injection-code.js
+index 8da6d81..b6a18da 100644
+--- a/node_modules/react-native-css/dist/module/metro/injection-code.js
++++ b/node_modules/react-native-css/dist/module/metro/injection-code.js
+@@ -11,11 +11,11 @@
+  * To fix this, we force our code to always import the CSS files, so now the CSS files are in every bundle.
+  */
+ export function getWebInjectionCode(filePaths) {
+-  const importStatements = filePaths.map(filePath => `import "${filePath}";`).join("\n");
++  const importStatements = filePaths.map(filePath => `import "${filePath.replace(/\\/g, '/')}";`).join("\n");
+   return Buffer.from(importStatements);
+ }
+ export function getNativeInjectionCode(cssFilePaths, values) {
+-  const importStatements = cssFilePaths.map(filePath => `import "${filePath}";`).join("\n");
++  const importStatements = cssFilePaths.map(filePath => `import "${filePath.replace(/\\/g, '/')}";`).join("\n");
+   const contents = values.map(value => `StyleCollection.inject(${JSON.stringify(value)});`).join("\n");
+   return Buffer.from(`import { StyleCollection } from "react-native-css/style-collection";\n${importStatements}\n${contents};export {};`);
+ }
