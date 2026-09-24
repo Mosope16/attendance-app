@@ -54,7 +54,7 @@ function toAppUser(profile: UserProfile | null, onRefresh: () => Promise<void>):
     fullName: profile.name,
     firstName,
     lastName,
-    imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
+    imageUrl: (profile as any).image_url || (profile as any).imageUrl || (profile as any).avatar_url || '',
     primaryEmailAddress: { emailAddress: profile.email },
     unsafeMetadata: {
       role: profile.role,

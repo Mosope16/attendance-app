@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, Platform, StatusBar, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, Platform, StatusBar, ActivityIndicator, Pressable, Alert,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Download, BarChart3 } from 'lucide-react-native';
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import { exportCsv } from '../../lib/exportCsv';
 
 const ff = Platform.OS === 'android';
 
@@ -22,6 +23,7 @@ export default function ReportsScreen() {
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [studentStats, setStudentStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -98,13 +100,88 @@ export default function ReportsScreen() {
     ? Math.round(studentStats.reduce((sum, s) => sum + s.attendance, 0) / studentStats.length)
     : 0;
 
+  const handlePrintCSV = async () => {
+    if (!selectedCourse) {
+      Alert.alert('No Course Selected', 'Please select a course to export.');
+      return;
+    }
+    if (studentStats.length === 0) {
+      Alert.alert('No Student Data', 'There are no enrolled students or sessions to export for this course.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const dateStr = new Date().toISOString().split('T')[0];
+      const timeStr = new Date().toLocaleTimeString();
+
+      const onTrackCount = studentStats.filter((s) => s.attendance >= 75).length;
+      const atRiskCount = studentStats.filter((s) => s.attendance < 75).length;
+
+      const rows: (string | number)[][] = [
+        ['SMARTATTEND ATTENDANCE REPORT'],
+        ['Course Code', selectedCourse.course_code || 'N/A'],
+        ['Course Title', selectedCourse.course_title || 'N/A'],
+        ['Lecturer / Instructor', `Dr. ${user?.lastName || user?.firstName || 'Lecturer'}`],
+        ['Report Generated Date', `${dateStr} ${timeStr}`],
+        ['Class Average Attendance', `${avgAttendance}%`],
+        ['Total Students Enrolled', studentStats.length],
+        ['Students On Track (>= 75%)', onTrackCount],
+        ['Students At Risk (< 75%)', atRiskCount],
+        [], // blank separator
+        ['S/N', 'Matric Number', 'Student Name', 'Present Sessions', 'Total Sessions Held', 'Attendance Rate (%)', 'Status'],
+      ];
+
+      studentStats.forEach((st, idx) => {
+        const onTrack = st.attendance >= 75;
+        rows.push([
+          idx + 1,
+          st.matric || 'N/A',
+          st.name || 'N/A',
+          st.present,
+          st.total,
+          `${st.attendance}%`,
+          onTrack ? 'On Track (Eligible)' : 'At Risk (< 75%)',
+        ]);
+      });
+
+      const filename = `${selectedCourse.course_code}_Attendance_Report_${dateStr}`;
+      await exportCsv({
+        filename,
+        rows,
+        dialogTitle: `Print / Share ${selectedCourse.course_code} Attendance CSV`,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const s = makeStyles(colors);
 
   return (
     <View style={s.root}>
+      {/* Header */}
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
-        <Text style={s.headerTitle}>Reports</Text>
-        <BarChart3 size={22} color="rgba(255,255,255,0.7)" />
+        <View>
+          <Text style={s.headerTitle}>Reports</Text>
+          <Text style={s.headerSub}>Attendance analytics & export</Text>
+        </View>
+        {courses.length > 0 && (
+          <Pressable
+            onPress={handlePrintCSV}
+            disabled={exporting || studentStats.length === 0}
+            style={[s.headerPrintBtn, (exporting || studentStats.length === 0) && { opacity: 0.5 }]}
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Download size={16} color="#FFFFFF" />
+                <Text style={s.headerPrintText}>Print CSV</Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </View>
 
       {loading ? (
@@ -157,8 +234,27 @@ export default function ReportsScreen() {
             </View>
           </View>
 
-          {/* Student List */}
-          <Text style={s.sectionLabel}>Student Breakdown</Text>
+          {/* Student List Section */}
+          <View style={s.sectionHeaderRow}>
+            <Text style={s.sectionLabel}>Student Breakdown</Text>
+            {studentStats.length > 0 && (
+              <Pressable
+                onPress={handlePrintCSV}
+                disabled={exporting}
+                style={[s.sectionPrintBtn, { backgroundColor: colors.secondaryDim }]}
+              >
+                {exporting ? (
+                  <ActivityIndicator size="small" color={SECONDARY} />
+                ) : (
+                  <>
+                    <Download size={14} color={SECONDARY} />
+                    <Text style={[s.sectionPrintText, { color: SECONDARY }]}>Print CSV</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
+
           {studentStats.length === 0 ? (
             <View style={s.noStudents}>
               <Text style={s.noStudentsText}>No enrolled students or no sessions yet.</Text>
@@ -206,6 +302,13 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     },
     headerTitle: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
+    headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2, fontFamily: ff ? 'sans-serif' : undefined },
+    headerPrintBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 8,
+      borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    },
+    headerPrintText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 },
     emptyTitle: { fontSize: 18, fontWeight: '700', color: c.text, fontFamily: ff ? 'sans-serif-medium' : undefined },
     emptySub: { fontSize: 14, color: c.textSub, textAlign: 'center', fontFamily: ff ? 'sans-serif' : undefined },
@@ -230,7 +333,16 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { fontSize: 12, color: c.textSub, fontFamily: ff ? 'sans-serif' : undefined },
-    sectionLabel: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12, fontFamily: ff ? 'sans-serif-medium' : undefined },
+    sectionHeaderRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: 12, marginTop: 4,
+    },
+    sectionLabel: { fontSize: 16, fontWeight: '700', color: c.text, fontFamily: ff ? 'sans-serif-medium' : undefined },
+    sectionPrintBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+    },
+    sectionPrintText: { fontSize: 12, fontWeight: '700', fontFamily: ff ? 'sans-serif-medium' : undefined },
     noStudents: { backgroundColor: c.card, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: c.cardBorder, alignItems: 'center' },
     noStudentsText: { fontSize: 14, color: c.textSub, fontFamily: ff ? 'sans-serif' : undefined },
     studentList: {

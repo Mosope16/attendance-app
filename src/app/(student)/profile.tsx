@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ThemeMode } from '../../context/ThemeContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 const ff = Platform.OS === 'android';
 
@@ -22,6 +23,7 @@ export default function StudentProfileScreen() {
   const router = useRouter();
   const { colors, mode, isDark, setMode } = useTheme();
   const supabase = useSupabaseClient();
+  const { isPermissionGranted, requestPermission } = useNotifications();
   const PRIMARY = colors.primary;
 
   const [courseCount, setCourseCount] = useState<number>(0);
@@ -91,9 +93,18 @@ export default function StudentProfileScreen() {
       onPress: () => router.push('/(student)/personal-info'),
     },
     {
-      icon: <Bell size={20} color={colors.textSub} />,
-      title: 'Notifications',
-      onPress: () => router.push('/(student)/notifications'),
+      icon: <Bell size={20} color={isPermissionGranted ? PRIMARY : colors.textSub} />,
+      title: 'Push Notifications',
+      subtitle: isPermissionGranted ? 'Enabled — alerts active for enrolled courses' : 'Disabled — Tap to enable attendance alerts',
+      badge: isPermissionGranted ? 'Enabled' : 'Enable',
+      badgeActive: isPermissionGranted,
+      onPress: async () => {
+        if (!isPermissionGranted) {
+          await requestPermission();
+        } else {
+          router.push('/(student)/notifications');
+        }
+      },
     },
     {
       icon: <Lock size={20} color={colors.textSub} />,
@@ -125,10 +136,15 @@ export default function StudentProfileScreen() {
       {/* Avatar Card */}
       <View style={s.cardWrapper}>
         <View style={s.avatarCard}>
-          <Image
-            source={{ uri: user?.imageUrl || `https://ui-avatars.com/api/?name=${user?.firstName || 'S'}&background=1B6B3A&color=fff&size=200` }}
-            style={s.avatar}
-          />
+          {user?.imageUrl ? (
+            <Image source={{ uri: user.imageUrl }} style={s.avatar} />
+          ) : (
+            <View style={[s.avatar, s.avatarFallback, { backgroundColor: PRIMARY }]}>
+              <Text style={s.avatarInitial}>
+                {(user?.firstName || 'S').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <Text style={s.name}>{user?.firstName} {user?.lastName}</Text>
           <View style={[s.roleBadge, { backgroundColor: colors.primaryDim }]}>
             <Text style={[s.roleText, { color: colors.primaryText }]}>Student</Text>
@@ -185,15 +201,36 @@ export default function StudentProfileScreen() {
         <Text style={s.sectionLabelText}>Account</Text>
       </View>
       <View style={s.menuCard}>
-        {menuItems.map((item, i) => (
+        {menuItems.map((item: any, i) => (
           <Pressable
             key={i}
             onPress={item.onPress}
             style={[s.menuItem, i < menuItems.length - 1 && s.menuItemBorder]}
           >
             <View style={s.menuIcon}>{item.icon}</View>
-            <Text style={s.menuText}>{item.title}</Text>
-            <ChevronRight size={18} color={colors.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.menuText}>{item.title}</Text>
+              {item.subtitle ? <Text style={s.menuSubText}>{item.subtitle}</Text> : null}
+            </View>
+            {item.badge ? (
+              <View
+                style={[
+                  s.notifBadge,
+                  { backgroundColor: item.badgeActive ? colors.primaryDim : '#FEE2E2' },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.notifBadgeText,
+                    { color: item.badgeActive ? PRIMARY : '#EF4444' },
+                  ]}
+                >
+                  {item.badge}
+                </Text>
+              </View>
+            ) : (
+              <ChevronRight size={18} color={colors.textMuted} />
+            )}
           </Pressable>
         ))}
       </View>
@@ -222,6 +259,8 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
       borderWidth: 1, borderColor: c.cardBorder, marginBottom: 12,
     },
     avatar: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: c.primaryDim, marginBottom: 14 },
+    avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+    avatarInitial: { fontSize: 36, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     name: { fontSize: 22, fontWeight: '700', color: c.text, marginBottom: 6, fontFamily: ff ? 'sans-serif-medium' : undefined },
     roleBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, marginBottom: 6 },
     roleText: { fontSize: 13, fontWeight: '600', fontFamily: ff ? 'sans-serif-medium' : undefined },
@@ -258,6 +297,9 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     menuItemBorder: { borderBottomWidth: 1, borderBottomColor: c.cardBorder },
     menuIcon: { width: 36, height: 36, backgroundColor: c.bg, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
     menuText: { flex: 1, fontSize: 15, color: c.text, fontWeight: '500', fontFamily: ff ? 'sans-serif-medium' : undefined },
+    menuSubText: { fontSize: 12, color: c.textSub, marginTop: 2, fontFamily: ff ? 'sans-serif' : undefined },
+    notifBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+    notifBadgeText: { fontSize: 12, fontWeight: '700', fontFamily: ff ? 'sans-serif-medium' : undefined },
     logoutBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
       backgroundColor: c.dangerDim, marginHorizontal: 20, borderRadius: 16, paddingVertical: 16, marginTop: 8,

@@ -53,7 +53,7 @@ export default function LecturerDashboard() {
       return;
     }
 
-    const courseIds = coursesList.map((c) => c.id);
+    const courseIds = coursesList.map((c: any) => c.id);
 
     // 2. Fetch all enrollments for these courses
     const { data: enrollments } = await supabase
@@ -67,7 +67,7 @@ export default function LecturerDashboard() {
       .select('id, course_id, end_time')
       .in('course_id', courseIds);
 
-    const sessionIds = sessions?.map((s) => s.id) ?? [];
+    const sessionIds = sessions?.map((s: any) => s.id) ?? [];
 
     // 4. Fetch all attendance records for these sessions
     let records: any[] = [];
@@ -80,7 +80,7 @@ export default function LecturerDashboard() {
     }
 
     // Process stats
-    const uniqueStudents = new Set(enrollments?.map((e) => e.student_id)).size;
+    const uniqueStudents = new Set(enrollments?.map((e: any) => e.student_id)).size;
     setTotalStudents(uniqueStudents);
     setTotalSessions(sessions?.length ?? 0);
 
@@ -89,11 +89,11 @@ export default function LecturerDashboard() {
     const now = new Date().toISOString();
 
     for (const c of coursesList) {
-      const courseEnrolled = enrollments?.filter((e) => e.course_id === c.id).length ?? 0;
-      const courseSessionsObj = sessions?.filter((s) => s.course_id === c.id) ?? [];
-      const courseSessions = courseSessionsObj.map((s) => s.id);
+      const courseEnrolled = enrollments?.filter((e: any) => e.course_id === c.id).length ?? 0;
+      const courseSessionsObj = sessions?.filter((s: any) => s.course_id === c.id) ?? [];
+      const courseSessions = courseSessionsObj.map((s: any) => s.id);
       
-      const hasActiveSession = courseSessionsObj.some((s) => s.end_time > now);
+      const hasActiveSession = courseSessionsObj.some((s: any) => s.end_time > now);
       
       if (courseSessions.length === 0 || courseEnrolled === 0) {
         courseStatsMap[c.id] = { enrolled: courseEnrolled, avgPct: 0, hasActiveSession };
@@ -132,10 +132,15 @@ export default function LecturerDashboard() {
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
         <View style={s.headerTop}>
           <View style={s.headerLeft}>
-            <Image
-              source={{ uri: user?.imageUrl || `https://ui-avatars.com/api/?name=${user?.firstName || 'L'}&background=003087&color=fff` }}
-              style={s.avatar}
-            />
+            {user?.imageUrl ? (
+              <Image source={{ uri: user.imageUrl }} style={s.avatar} />
+            ) : (
+              <View style={[s.avatar, s.avatarFallback, { backgroundColor: '#002266' }]}>
+                <Text style={s.avatarInitial}>
+                  {(user?.lastName || user?.firstName || 'L').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <View>
               <Text style={s.greeting}>{getGreeting()}</Text>
               <Text style={s.username}>Dr. {user?.lastName || user?.firstName || 'Lecturer'}</Text>
@@ -242,6 +247,8 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
     avatar: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', marginRight: 12 },
+    avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+    avatarInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     greeting: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontFamily: ff ? 'sans-serif' : undefined },
     username: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     bellBtn: { width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

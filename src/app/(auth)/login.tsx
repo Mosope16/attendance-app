@@ -7,6 +7,7 @@ import { User, Lock, GraduationCap, Eye, EyeOff } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatFriendlyAuthError } from '../../lib/auth';
 
 const ff = Platform.OS === 'android';
 
@@ -38,10 +39,10 @@ export default function LoginScreen() {
       if (res.user) {
         router.replace('/');
       } else {
-        setError(res.error || 'Invalid credentials. Please try again.');
+        setError(formatFriendlyAuthError(res.error || 'Invalid credentials. Please try again.'));
       }
     } catch (err: any) {
-      setError(err?.message || 'An error occurred during sign in.');
+      setError(formatFriendlyAuthError(err?.message || 'An error occurred during sign in.'));
     } finally {
       setLoading(false);
     }

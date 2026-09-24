@@ -9,6 +9,7 @@ import { useSupabaseClient } from '../../lib/supabase';
 import { Bell, BookOpen, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 const ff = Platform.OS === 'android';
 
@@ -19,6 +20,7 @@ export default function StudentDashboard() {
   const { colors, isDark } = useTheme();
   const supabase = useSupabaseClient();
   const PRIMARY = colors.primary;
+  const { isPermissionGranted, promptForCourseAccess, checkActiveSessionsForEnrolledCourses } = useNotifications();
 
   const [courses, setCourses] = useState<any[]>([]);
   const [overallPct, setOverallPct] = useState<number | null>(null);
@@ -32,9 +34,10 @@ export default function StudentDashboard() {
       if (Platform.OS === 'android') StatusBar.setBackgroundColor(isDark ? '#0D3320' : PRIMARY);
       const timer = setTimeout(() => {
         fetchAll();
+        checkActiveSessionsForEnrolledCourses();
       }, 150);
       return () => clearTimeout(timer);
-    }, [user?.id, isDark, PRIMARY])
+    }, [user?.id, isDark, PRIMARY, checkActiveSessionsForEnrolledCourses])
   );
 
   const fetchAll = async () => {
@@ -113,10 +116,15 @@ export default function StudentDashboard() {
       <View style={[s.header, { paddingTop: Math.max(insets.top, 20) + 12 }]}>
         <View style={s.headerInner}>
           <View style={s.headerLeft}>
-            <Image
-              source={{ uri: user?.imageUrl || `https://ui-avatars.com/api/?name=${user?.firstName || 'S'}&background=1B6B3A&color=fff` }}
-              style={s.avatar}
-            />
+            {user?.imageUrl ? (
+              <Image source={{ uri: user.imageUrl }} style={s.avatar} />
+            ) : (
+              <View style={[s.avatar, s.avatarFallback, { backgroundColor: '#13532C' }]}>
+                <Text style={s.avatarInitial}>
+                  {(user?.firstName || 'S').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <View>
               <Text style={s.greeting}>{getGreeting()}</Text>
               <Text style={s.username}>Hi, {user?.firstName || 'Student'}</Text>
@@ -145,6 +153,26 @@ export default function StudentDashboard() {
 
       {/* Content */}
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+        {!isPermissionGranted && (
+          <View style={s.notifBanner}>
+            <View style={s.notifBannerLeft}>
+              <View style={[s.notifIconWrap, { backgroundColor: colors.primaryDim }]}>
+                <Bell size={18} color={PRIMARY} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.notifBannerTitle}>Push Notifications Disabled</Text>
+                <Text style={s.notifBannerSub}>Enable notifications so you never miss an attendance session.</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => promptForCourseAccess()}
+              style={[s.notifBannerBtn, { backgroundColor: PRIMARY }]}
+            >
+              <Text style={s.notifBannerBtnText}>Enable</Text>
+            </Pressable>
+          </View>
+        )}
+
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>My Courses</Text>
           <Pressable onPress={() => router.push('/(student)/enroll')}>
@@ -213,6 +241,8 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     headerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
     avatar: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', marginRight: 12 },
+    avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+    avatarInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     greeting: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontFamily: ff ? 'sans-serif' : undefined },
     username: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', fontFamily: ff ? 'sans-serif-medium' : undefined },
     bellBtn: { width: 40, height: 40, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
@@ -245,5 +275,55 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     circleWrapper: { alignItems: 'center', marginLeft: 12 },
     circle: { width: 56, height: 56, borderRadius: 28, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
     circleText: { fontWeight: '700', fontSize: 14, fontFamily: ff ? 'sans-serif-medium' : undefined },
+    notifBanner: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.primaryDim,
+      marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    notifBannerLeft: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    notifIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.text,
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    notifBannerSub: {
+      fontSize: 12,
+      color: c.textSub,
+      marginTop: 2,
+      fontFamily: ff ? 'sans-serif' : undefined,
+    },
+    notifBannerBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
   });
 }

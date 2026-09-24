@@ -3,9 +3,10 @@ import { View, Text, ScrollView, Pressable, StyleSheet, Platform, ActivityIndica
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
-import { ChevronLeft, Plus, CheckCircle, Search } from 'lucide-react-native';
+import { ChevronLeft, Plus, CheckCircle, Search, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 const ff = Platform.OS === 'android';
 
@@ -16,6 +17,7 @@ export default function EnrollScreen() {
   const supabase = useSupabaseClient();
   const { colors } = useTheme();
   const PRIMARY = colors.primary;
+  const { isPermissionGranted, promptForCourseAccess, notifyEnrolledCourse } = useNotifications();
 
   const [allCourses, setAllCourses] = useState<any[]>([]);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(new Set());
@@ -43,7 +45,7 @@ export default function EnrollScreen() {
         .order('course_code', { ascending: true });
 
       // Add derived dept and level directly from the course code string (Proof of Concept)
-      const enrichedCourses = (coursesData || []).map(c => {
+      const enrichedCourses = (coursesData || []).map((c: any) => {
         const dMatch = c.course_code.match(/^[a-zA-Z]+/);
         const nMatch = c.course_code.match(/[0-9]+/);
         const department = dMatch ? dMatch[0].toUpperCase() : 'OTHER';
@@ -59,7 +61,7 @@ export default function EnrollScreen() {
         .eq('student_id', user.id);
 
       setAllCourses(enrichedCourses);
-      setEnrolledCourseIds(new Set(enrollmentsData?.map(e => e.course_id) || []));
+      setEnrolledCourseIds(new Set(enrollmentsData?.map((e: any) => e.course_id) || []));
     } catch (error) {
       console.error(error);
     } finally {
@@ -70,6 +72,10 @@ export default function EnrollScreen() {
   const handleEnroll = async (courseId: string) => {
     if (!user) return;
     setEnrollingId(courseId);
+
+    const targetCourse = allCourses.find((c: any) => c.id === courseId);
+    const courseCode = targetCourse?.course_code || 'this course';
+    const courseTitle = targetCourse?.course_title || '';
 
     const { error } = await supabase
       .from('enrollments')
@@ -98,6 +104,22 @@ export default function EnrollScreen() {
         next.add(courseId);
         return next;
       });
+
+      // Prompt user to enable notifications for this enrolled course if not already granted
+      const granted = await promptForCourseAccess(courseCode);
+      if (granted) {
+        await notifyEnrolledCourse(courseCode, courseTitle);
+      }
+
+      Alert.alert(
+        'Enrolled Successfully',
+        `You have enrolled in ${courseCode}. ${
+          granted
+            ? 'Push notifications are active: you will be alerted when attendance sessions begin.'
+            : 'Push notifications are disabled. Enable them in your device settings to get attendance alerts.'
+        }`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -120,6 +142,26 @@ export default function EnrollScreen() {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+        {!isPermissionGranted && (
+          <View style={s.notifBanner}>
+            <View style={s.notifBannerLeft}>
+              <View style={[s.notifIconWrap, { backgroundColor: colors.primaryDim }]}>
+                <Bell size={18} color={PRIMARY} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.notifBannerTitle}>Enable Course Notifications</Text>
+                <Text style={s.notifBannerSub}>Get alerted immediately when attendance opens for your enrolled courses</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => promptForCourseAccess()}
+              style={[s.notifBannerBtn, { backgroundColor: PRIMARY }]}
+            >
+              <Text style={s.notifBannerBtnText}>Enable</Text>
+            </Pressable>
+          </View>
+        )}
+
         <View style={s.searchMock}>
           <Search size={20} color={colors.textMuted} />
           <Text style={s.searchMockText}>Browse Available Courses</Text>
@@ -259,5 +301,55 @@ function makeStyles(c: any) {
     enrollBtnText: { color: '#FFF', fontWeight: '600', fontSize: 14, fontFamily: ff ? 'sans-serif-medium' : undefined },
     enrolledBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D1FAE5', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, gap: 6 },
     enrolledText: { color: '#059669', fontSize: 13, fontWeight: '600', fontFamily: ff ? 'sans-serif-medium' : undefined },
+    notifBanner: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.primaryDim,
+      marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    notifBannerLeft: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    notifIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.text,
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    notifBannerSub: {
+      fontSize: 12,
+      color: c.textSub,
+      marginTop: 2,
+      fontFamily: ff ? 'sans-serif' : undefined,
+    },
+    notifBannerBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
   });
 }

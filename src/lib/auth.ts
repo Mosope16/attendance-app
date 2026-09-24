@@ -29,6 +29,48 @@ export interface SessionData {
   user: UserProfile;
 }
 
+export function formatFriendlyAuthError(err: any): string {
+  if (!err) return 'An unexpected error occurred. Please try again.';
+
+  const message = typeof err === 'string'
+    ? err
+    : (err?.message || err?.error || err?.details || String(err));
+
+  const lower = message.toLowerCase();
+
+  // Detect internet connection, DNS, host, network or fetch failures
+  const isNetworkOrHostError =
+    lower.includes('enotfound') ||
+    lower.includes('getaddrinfo') ||
+    lower.includes('hostname') ||
+    lower.includes('no address associated') ||
+    lower.includes('unable to resolve') ||
+    lower.includes('neon.tech') ||
+    lower.includes('neon database') ||
+    lower.includes('network request failed') ||
+    lower.includes('network error') ||
+    lower.includes('networkerror') ||
+    lower.includes('fetch failed') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('econnrefused') ||
+    lower.includes('timedout') ||
+    lower.includes('timeout') ||
+    lower.includes('err_name_not_resolved') ||
+    lower.includes('err_internet_disconnected') ||
+    lower.includes('offline');
+
+  if (isNetworkOrHostError) {
+    return 'No internet connection. Please connect to the internet and try again.';
+  }
+
+  // Handle specific user credential errors cleanly
+  if (lower.includes('invalid') && (lower.includes('password') || lower.includes('credential') || lower.includes('email'))) {
+    return 'Invalid email, matric number, or password.';
+  }
+
+  return message;
+}
+
 // Storage helpers with web/SSR fallback
 async function getStorageItem(key: string): Promise<string | null> {
   try {
@@ -139,7 +181,7 @@ export const neonAuth = {
       if (!res.ok || data.code) {
         return {
           user: null,
-          error: data.message || 'Registration failed. Please check your credentials.',
+          error: formatFriendlyAuthError(data.message || 'Registration failed. Please check your credentials.'),
         };
       }
 
@@ -162,7 +204,7 @@ export const neonAuth = {
         console.error('Error creating user profile in Neon DB:', dbError);
         return {
           user: null,
-          error: typeof dbError === 'string' ? dbError : (dbError.message || 'Database error creating profile.'),
+          error: formatFriendlyAuthError(dbError) || 'Database error creating profile.',
         };
       }
 
@@ -174,7 +216,7 @@ export const neonAuth = {
       return { user: profile, error: null };
     } catch (err: any) {
       console.error('SignUp exception:', err);
-      return { user: null, error: err.message || 'Network error during registration.' };
+      return { user: null, error: formatFriendlyAuthError(err) };
     }
   },
 
@@ -190,20 +232,34 @@ export const neonAuth = {
 
       // If user typed Matric Number or Staff ID instead of email, resolve it:
       if (!emailToUse.includes('@')) {
-        const { data: studentMatch } = await db
+        const { data: studentMatch, error: sErr } = await db
           .from('users')
           .select('email')
           .eq('matric_number', identifier.trim())
           .single();
 
+        if (sErr) {
+          const friendly = formatFriendlyAuthError(sErr);
+          if (friendly.includes('internet')) {
+            return { user: null, error: friendly };
+          }
+        }
+
         if (studentMatch?.email) {
           emailToUse = studentMatch.email;
         } else {
-          const { data: lecturerMatch } = await db
+          const { data: lecturerMatch, error: lErr } = await db
             .from('users')
             .select('email')
             .eq('staff_id', identifier.trim())
             .single();
+
+          if (lErr) {
+            const friendly = formatFriendlyAuthError(lErr);
+            if (friendly.includes('internet')) {
+              return { user: null, error: friendly };
+            }
+          }
 
           if (lecturerMatch?.email) {
             emailToUse = lecturerMatch.email;
@@ -228,7 +284,7 @@ export const neonAuth = {
       if (!res.ok || data.code) {
         return {
           user: null,
-          error: data.message || 'Invalid email, ID, or password.',
+          error: formatFriendlyAuthError(data.message || 'Invalid email, ID, or password.'),
         };
       }
 
@@ -237,11 +293,18 @@ export const neonAuth = {
       const cookie = res.headers.get('set-cookie') || '';
 
       // 2. Fetch full user profile from public.users
-      const { data: profileData } = await db
+      const { data: profileData, error: profErr } = await db
         .from('users')
         .select('*')
         .eq('id', neonUser.id)
         .single();
+
+      if (profErr) {
+        const friendly = formatFriendlyAuthError(profErr);
+        if (friendly.includes('internet')) {
+          return { user: null, error: friendly };
+        }
+      }
 
       const user: UserProfile = {
         id: neonUser.id,
@@ -263,7 +326,7 @@ export const neonAuth = {
       return { user, error: null };
     } catch (err: any) {
       console.error('SignIn exception:', err);
-      return { user: null, error: err.message || 'Network error during sign in.' };
+      return { user: null, error: formatFriendlyAuthError(err) };
     }
   },
 

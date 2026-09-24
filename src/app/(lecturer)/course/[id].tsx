@@ -10,6 +10,7 @@ import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download } from 'lu
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Location from 'expo-location';
+import { exportCsv } from '../../../lib/exportCsv';
 import QRCode from 'react-native-qrcode-svg';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -175,35 +176,64 @@ export default function LecturerCourseDetails() {
     loadData();
   };
 
+  const [exporting, setExporting] = useState(false);
+
   const handleExportCSV = async () => {
+    if (!course) return;
+    if (students.length === 0) {
+      Alert.alert('No Student Data', 'No students are enrolled in this course yet.');
+      return;
+    }
+
     try {
-      const rows = [['Matric Number', 'Name', 'Status']];
-      for (const item of students) {
+      setExporting(true);
+      const dateStr = new Date().toISOString().split('T')[0];
+      const timeStr = new Date().toLocaleTimeString();
+
+      const rows: (string | number)[][] = [
+        ['SMARTATTEND COURSE ATTENDANCE SHEET'],
+        ['Course Code', course.course_code || 'N/A'],
+        ['Course Title', course.course_title || 'N/A'],
+        ['Lecturer / Instructor', `Dr. ${user?.lastName || user?.firstName || 'Lecturer'}`],
+        ['Report Generated Date', `${dateStr} ${timeStr}`],
+      ];
+
+      if (activeSession) {
+        rows.push(['Session Status', 'ACTIVE LIVE SESSION']);
+        rows.push(['Attendance PIN Code', activeSession.attendance_code || 'N/A']);
+        rows.push(['Session Opened', new Date(activeSession.start_time).toLocaleTimeString()]);
+        rows.push(['Session Closes', new Date(activeSession.end_time).toLocaleTimeString()]);
+        rows.push(['Total Enrolled', students.length]);
+        rows.push(['Total Marked Present', presentStudentIds.size]);
+        rows.push(['Total Absent', Math.max(0, students.length - presentStudentIds.size)]);
+      } else {
+        rows.push(['Session Status', 'FULL CLASS ROSTER']);
+        rows.push(['Total Enrolled Students', students.length]);
+      }
+
+      rows.push([]); // blank separator line
+      rows.push(['S/N', 'Matric Number', 'Student Name', 'Attendance Status']);
+
+      students.forEach((item: any, index: number) => {
         const student = item.student;
-        if (!student) continue;
-        const isPresent = presentStudentIds.has(student.id);
+        if (!student) return;
+        const isPresent = activeSession ? presentStudentIds.has(student.id) : false;
         rows.push([
+          index + 1,
           student.matric_number || 'N/A',
           student.name || 'N/A',
-          isPresent ? 'Present' : 'Absent'
+          activeSession ? (isPresent ? 'Present' : 'Absent') : 'Enrolled',
         ]);
-      }
-      
-      const csvString = rows.map(r => r.join(',')).join('\n');
-      const filename = `${course.course_code}_Attendance_${new Date().toISOString().split('T')[0]}.csv`;
-      const fileUri = `${(FileSystem as any).documentDirectory || ''}${filename}`;
-      
-      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
-      
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export Attendance' });
-      } else {
-        alert('Sharing is not available on this device');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to export CSV');
+      });
+
+      const filename = `${course.course_code}_Attendance_${dateStr}`;
+      await exportCsv({
+        filename,
+        rows,
+        dialogTitle: `Print / Share ${course.course_code} Attendance CSV`,
+      });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -336,9 +366,19 @@ export default function LecturerCourseDetails() {
             <Text style={s.sectionTitle}>Student Roster</Text>
             {refreshing && <ActivityIndicator size="small" color={SECONDARY} />}
           </View>
-          <Pressable onPress={handleExportCSV} style={[s.exportBtn, { backgroundColor: colors.secondaryDim }]}>
-            <Download size={14} color={SECONDARY} />
-            <Text style={[s.exportText, { color: SECONDARY }]}>Export CSV</Text>
+          <Pressable
+            onPress={handleExportCSV}
+            disabled={exporting || students.length === 0}
+            style={[s.exportBtn, { backgroundColor: colors.secondaryDim }, (exporting || students.length === 0) && { opacity: 0.6 }]}
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color={SECONDARY} />
+            ) : (
+              <>
+                <Download size={14} color={SECONDARY} />
+                <Text style={[s.exportText, { color: SECONDARY }]}>Print / Export CSV</Text>
+              </>
+            )}
           </Pressable>
         </View>
 

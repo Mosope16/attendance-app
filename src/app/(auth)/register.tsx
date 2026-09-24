@@ -8,6 +8,7 @@ import { User, Lock, Mail, Hash, GraduationCap } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatFriendlyAuthError } from '../../lib/auth';
 
 const ff = Platform.OS === 'android';
 
@@ -66,10 +67,10 @@ export default function RegisterScreen() {
       if (res.user) {
         router.replace('/');
       } else {
-        setError(res.error || 'Registration failed. Please try again.');
+        setError(formatFriendlyAuthError(res.error || 'Registration failed. Please try again.'));
       }
     } catch (err: any) {
-      setError(err?.message || 'An error occurred during registration.');
+      setError(formatFriendlyAuthError(err?.message || 'An error occurred during registration.'));
     } finally {
       setLoading(false);
     }

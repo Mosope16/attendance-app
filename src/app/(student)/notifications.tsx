@@ -1,13 +1,15 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { BellRing, BookOpen } from 'lucide-react-native';
+import { BellRing, BookOpen, Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect } from 'expo-router';
 import { useUser } from '../../context/AuthContext';
 import { useSupabaseClient } from '../../lib/supabase';
+import { useNotifications } from '../../context/NotificationContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Pressable } from 'react-native';
 
 const ff = Platform.OS === 'android';
 
@@ -33,6 +35,7 @@ export default function NotificationsScreen() {
   
   const { user } = useUser();
   const supabase = useSupabaseClient();
+  const { isPermissionGranted, requestPermission } = useNotifications();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,26 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+        {!isPermissionGranted && (
+          <View style={s.notifBanner}>
+            <View style={s.notifBannerLeft}>
+              <View style={[s.notifIconWrap, { backgroundColor: colors.primaryDim }]}>
+                <Bell size={18} color={PRIMARY} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.notifBannerTitle}>Push Notifications Disabled</Text>
+                <Text style={s.notifBannerSub}>Enable notifications so you get alerted when attendance opens for your courses.</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => requestPermission()}
+              style={[s.notifBannerBtn, { backgroundColor: PRIMARY }]}
+            >
+              <Text style={s.notifBannerBtnText}>Enable</Text>
+            </Pressable>
+          </View>
+        )}
+
         {loading ? (
           <View style={s.loadingBox}>
             <ActivityIndicator color={PRIMARY} />
@@ -203,5 +226,55 @@ function makeStyles(c: ReturnType<typeof import('../../context/ThemeContext').us
     notifMessage: { fontSize: 13, color: c.textSub, marginBottom: 6, lineHeight: 20, fontFamily: ff ? 'sans-serif' : undefined },
     notifTime: { fontSize: 11, color: c.textMuted, fontFamily: ff ? 'sans-serif' : undefined },
     dot: { width: 9, height: 9, backgroundColor: c.primary, borderRadius: 5, marginTop: 4, marginLeft: 8 },
+    notifBanner: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.primaryDim,
+      marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    notifBannerLeft: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    notifIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: c.text,
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    notifBannerSub: {
+      fontSize: 12,
+      color: c.textSub,
+      marginTop: 2,
+      fontFamily: ff ? 'sans-serif' : undefined,
+    },
+    notifBannerBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notifBannerBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
   });
 }

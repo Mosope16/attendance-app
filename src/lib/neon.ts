@@ -40,6 +40,33 @@ export async function executeSql<T = any>(query: string): Promise<{ data: T[] | 
     return { data: (json.rows as T[]) || [], error: null };
   } catch (err: any) {
     console.error('Neon SQL Error:', err);
+    const msg = String(err?.message || err || '');
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes('enotfound') ||
+      lower.includes('getaddrinfo') ||
+      lower.includes('hostname') ||
+      lower.includes('no address associated') ||
+      lower.includes('unable to resolve') ||
+      lower.includes('neon.tech') ||
+      lower.includes('neon database') ||
+      lower.includes('network request failed') ||
+      lower.includes('network error') ||
+      lower.includes('networkerror') ||
+      lower.includes('fetch failed') ||
+      lower.includes('failed to fetch') ||
+      lower.includes('econnrefused') ||
+      lower.includes('timedout') ||
+      lower.includes('timeout') ||
+      lower.includes('err_name_not_resolved') ||
+      lower.includes('err_internet_disconnected') ||
+      lower.includes('offline')
+    ) {
+      return {
+        data: null,
+        error: { message: 'No internet connection. Please connect to the internet and try again.' },
+      };
+    }
     return { data: null, error: err };
   }
 }

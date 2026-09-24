@@ -3,6 +3,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ThemeProvider } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { NotificationProvider } from '../context/NotificationContext';
 
 function InitialLayout() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -28,7 +29,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <InitialLayout />
+        <NotificationProvider>
+          <InitialLayout />
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );
