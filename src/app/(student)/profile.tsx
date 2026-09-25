@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ThemeMode } from '../../context/ThemeContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { parseSafeDate } from '../../lib/dateUtils';
 
 const ff = Platform.OS === 'android';
 
@@ -77,7 +78,7 @@ export default function StudentProfileScreen() {
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
-    setWeekCount(records?.filter((r: any) => new Date(r.timestamp) >= weekStart).length ?? 0);
+    setWeekCount(records?.filter((r: any) => parseSafeDate(r.timestamp) >= weekStart).length ?? 0);
     setStatsLoading(false);
   };
 

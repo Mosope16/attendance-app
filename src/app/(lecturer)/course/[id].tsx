@@ -6,7 +6,7 @@ import { StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useUser } from '../../../context/AuthContext';
 import { useSupabaseClient } from '../../../lib/supabase';
-import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download, MapPin } from 'lucide-react-native';
+import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download, MapPin, XCircle } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { exportCsv } from '../../../lib/exportCsv';
@@ -137,6 +137,56 @@ export default function LecturerCourseDetails() {
       supabase.removeChannel(channel);
     };
   }, [id, supabase]);
+
+  const [timeLeft, setTimeLeft] = useState<string>('');
+
+  // Live countdown timer that automatically expires the session when time elapses
+  useEffect(() => {
+    if (!activeSession?.end_time) {
+      setTimeLeft('');
+      return;
+    }
+
+    const checkTime = () => {
+      const diff = new Date(activeSession.end_time).getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setActiveSession(null);
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`);
+      }
+    };
+
+    checkTime();
+    const interval = setInterval(checkTime, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession?.end_time]);
+
+  const endSession = async () => {
+    if (!activeSession) return;
+
+    Alert.alert(
+      'Close Attendance Session?',
+      'Are you sure you want to end this attendance session now? Students will no longer be able to mark attendance.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'End Session',
+          style: 'destructive',
+          onPress: async () => {
+            const now = new Date().toISOString();
+            await supabase
+              .from('attendance_sessions')
+              .update({ end_time: now })
+              .eq('id', activeSession.id);
+            setActiveSession(null);
+          },
+        },
+      ]
+    );
+  };
 
   const startSession = async () => {
     let latitude: number | null = null;
@@ -341,6 +391,7 @@ export default function LecturerCourseDetails() {
               <Clock size={14} color={colors.textMuted} />
               <Text style={s.timeText}>
                 Ends {formatTime(activeSession.end_time)}
+                {timeLeft ? ` (${timeLeft} remaining)` : ''}
               </Text>
             </View>
 
@@ -350,6 +401,11 @@ export default function LecturerCourseDetails() {
                 <Text style={[s.geoBadgeText, { color: SECONDARY }]}>Geofence Active · 50m Radius</Text>
               </View>
             ) : null}
+
+            <Pressable onPress={endSession} style={s.endSessionBtn}>
+              <XCircle size={15} color="#DC2626" />
+              <Text style={s.endSessionBtnText}>Close Attendance Now</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={s.card}>
@@ -487,6 +543,22 @@ function makeStyles(c: ReturnType<typeof import('../../../context/ThemeContext')
     geoBadgeText: {
       fontSize: 12,
       fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    endSessionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: '#FEE2E2',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      marginTop: 12,
+    },
+    endSessionBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#DC2626',
       fontFamily: ff ? 'sans-serif-medium' : undefined,
     },
     qrBox: { marginVertical: 14, padding: 12, borderRadius: 16, borderWidth: 1, backgroundColor: c.card },

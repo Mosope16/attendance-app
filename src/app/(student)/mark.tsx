@@ -77,7 +77,7 @@ export default function MarkAttendanceScreen() {
     const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
-      .select('id, course_id, latitude, longitude')
+      .select('id, course_id, latitude, longitude, course:course_id(course_code, course_title)')
       .eq('attendance_code', attendanceCode.toUpperCase())
       .gt('end_time', now)
       .single();
@@ -85,6 +85,23 @@ export default function MarkAttendanceScreen() {
     if (sessionError || !session) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError('Invalid or expired attendance code. Please check and try again.');
+      setLoading(false);
+      setScanned(false);
+      return;
+    }
+
+    // ─── Verify Student is Enrolled in Course ───────────────────────────
+    const { data: enrollment } = await supabase
+      .from('enrollments')
+      .select('id')
+      .eq('course_id', session.course_id)
+      .eq('student_id', user.id)
+      .single();
+
+    if (!enrollment) {
+      const courseCode = (session as any)?.course?.course_code || 'this course';
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setError(`You are not enrolled in ${courseCode}. Please enroll in this course first to mark attendance.`);
       setLoading(false);
       setScanned(false);
       return;

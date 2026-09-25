@@ -118,14 +118,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       const courseIds = enrolledCourses.map((c: any) => c.id);
 
-      // 2. Query any active sessions (created in last 3 hours and is_active = true)
-      const cutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      // 2. Query any active sessions (where end_time > now)
+      const now = new Date().toISOString();
       const { data: activeSessions } = await supabase
         .from('attendance_sessions')
-        .select('id, course_id, start_time, is_active')
+        .select('id, course_id, start_time, end_time')
         .in('course_id', courseIds)
-        .eq('is_active', true)
-        .gt('start_time', cutoff);
+        .gt('end_time', now);
 
       if (activeSessions && activeSessions.length > 0) {
         for (const session of activeSessions) {

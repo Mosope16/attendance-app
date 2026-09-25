@@ -46,6 +46,7 @@ Traditional paper attendance sheets and static digital rosters suffer from buddy
 ## ✨ Key Features
 
 ### Student Features
+
 - **Smart Dashboard**: Real-time overview of enrolled courses, total attendance percentage, and current-week attendance tally.
 - **Course Catalog & Enrollment**: Search and filter available courses by academic department and level (100–500L).
 - **Automated Course Alerts**: Prompts student on enrollment to enable notifications, instantly dispatching push alerts when attendance sessions open.
@@ -54,6 +55,7 @@ Traditional paper attendance sheets and static digital rosters suffer from buddy
 - **Personalized Profile**: Native initials avatar generator, contact info, and theme switch (Light, Dark, System default).
 
 ### Lecturer Features
+
 - **Lecturer Control Center**: High-level metrics tracking total students reached, average attendance rate across courses, and active sessions.
 - **Course Management**: Create new courses with course code, title, department, level, and credit unit specifications.
 - **Dynamic Session Launcher**:
@@ -64,6 +66,7 @@ Traditional paper attendance sheets and static digital rosters suffer from buddy
 - **Export to CSV**: Instant RFC 4180-compliant CSV download and mobile sharing for course-specific rosters or institute-wide semester reports.
 
 ### Verification & Reliability
+
 - **Haversine Geofencing**: Mathematical validation ensures students are physically located in the lecture hall.
 - **Offline Error Interceptor**: Detects network dropouts and DNS failures, displaying user-friendly connection prompts instead of raw database errors.
 - **Secure Storage**: Sessions, auth tokens, and preferences safely preserved with `expo-secure-store`.
@@ -72,17 +75,17 @@ Traditional paper attendance sheets and static digital rosters suffer from buddy
 
 ## 🛠 Architecture & Tech Stack
 
-| Layer | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Framework** | [React Native 0.86](https://reactnative.dev) / [Expo SDK 57](https://expo.dev) | Cross-platform native mobile runtime |
-| **Routing** | [Expo Router](https://docs.expo.dev/router/introduction/) | Type-safe, file-based routing with deep linking |
-| **Database** | [Neon Serverless Postgres](https://neon.tech) | Scalable Postgres accessed via serverless HTTP driver |
-| **Authentication** | [Neon Better Auth](https://neon.tech/docs/guides/neon-auth) / SecureStore | Token-based auth supporting Email, Matric Number, and Staff ID |
-| **Hardware APIs** | `expo-camera`, `expo-location`, `expo-haptics` | Camera QR scanning, GPS geolocation, and tactile feedback |
-| **Notifications** | `expo-notifications` | Push and local notification channels for class session alerts |
-| **Export Engine** | `expo-file-system`, `expo-sharing` | In-memory CSV compilation and native share sheet triggering |
-| **UI & Icons** | Vanilla StyleSheet & Lucide React Native | Fluid, responsive layouts with Dark / Light theme tokens |
-| **Build System** | [Expo Application Services (EAS)](https://expo.dev/eas) | Cloud and local Android APK compilation |
+| Layer              | Technology                                                                     | Purpose                                                        |
+| :----------------- | :----------------------------------------------------------------------------- | :------------------------------------------------------------- |
+| **Framework**      | [React Native 0.86](https://reactnative.dev) / [Expo SDK 57](https://expo.dev) | Cross-platform native mobile runtime                           |
+| **Routing**        | [Expo Router](https://docs.expo.dev/router/introduction/)                      | Type-safe, file-based routing with deep linking                |
+| **Database**       | [Neon Serverless Postgres](https://neon.tech)                                  | Scalable Postgres accessed via serverless HTTP driver          |
+| **Authentication** | [Neon Better Auth](https://neon.tech/docs/guides/neon-auth) / SecureStore      | Token-based auth supporting Email, Matric Number, and Staff ID |
+| **Hardware APIs**  | `expo-camera`, `expo-location`, `expo-haptics`                                 | Camera QR scanning, GPS geolocation, and tactile feedback      |
+| **Notifications**  | `expo-notifications`                                                           | Push and local notification channels for class session alerts  |
+| **Export Engine**  | `expo-file-system`, `expo-sharing`                                             | In-memory CSV compilation and native share sheet triggering    |
+| **UI & Icons**     | Vanilla StyleSheet & Lucide React Native                                       | Fluid, responsive layouts with Dark / Light theme tokens       |
+| **Build System**   | [Expo Application Services (EAS)](https://expo.dev/eas)                        | Cloud and local Android APK compilation                        |
 
 ---
 
@@ -210,6 +213,7 @@ $$c = 2 \cdot \text{atan2}\left(\sqrt{a}, \sqrt{1-a}\right)$$
 $$d = R \cdot c$$
 
 Where:
+
 - $R \approx 6,371,000 \text{ meters}$ (mean radius of Earth)
 - $\Delta\phi = \phi_2 - \phi_1$ (latitude difference in radians)
 - $\Delta\lambda = \lambda_2 - \lambda_1$ (longitude difference in radians)
@@ -222,6 +226,7 @@ If $d \le 50\text{m}$, the scan proceeds and the attendance record is inserted i
 ## 📦 Getting Started
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org) (v18 or LTS recommended)
 - [npm](https://www.npmjs.com) or [yarn](https://yarnpkg.com)
 - [Expo Go app](https://expo.dev/go) or Android Emulator / physical device
@@ -243,17 +248,20 @@ EXPO_PUBLIC_NEON_AUTH_URL=https://ep-example.neonauth.c-7.us-east-2.aws.neon.tec
 ### Installation & Local Run
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/Mosope16/attendance-app.git
    cd attendance-app
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Start the development server**:
+
    ```bash
    npx expo start
    ```
@@ -270,11 +278,13 @@ EXPO_PUBLIC_NEON_AUTH_URL=https://ep-example.neonauth.c-7.us-east-2.aws.neon.tec
 The project includes an `eas.json` file pre-configured to output standalone `.apk` packages for distribution:
 
 1. **Install EAS CLI globally**:
+
    ```bash
    npm install --global eas-cli
    ```
 
 2. **Log into your Expo account**:
+
    ```bash
    eas login
    ```
@@ -290,6 +300,7 @@ The project includes an `eas.json` file pre-configured to output standalone `.ap
 ## 📊 Exporting Reports
 
 Lecturers can export attendance sheets in standard CSV format at any time:
+
 1. Navigate to **Reports** from the lecturer dashboard or open any **Course Details** screen.
 2. Select **Export to CSV**.
 3. The app compiles all check-ins with:
