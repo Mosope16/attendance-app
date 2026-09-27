@@ -8,7 +8,14 @@
     "scheme": "attendanceapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.mosopefoluwa2k.attendanceapp",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "SmartAttend requires access to your camera to scan classroom attendance QR codes.",
+        "NSLocationWhenInUseUsageDescription": "SmartAttend requires access to your location to verify attendance within the lecture hall geofence.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SmartAttend requires access to your location to verify attendance within the lecture hall geofence."
+      }
     },
     "android": {
       "package": "com.mosopefoluwa2k.attendanceapp",
@@ -42,6 +49,18 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#16A34A"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SmartAttend requires access to your camera to scan classroom attendance QR codes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SmartAttend requires access to your location to verify attendance within the lecture hall geofence."
         }
       ]
     ],
