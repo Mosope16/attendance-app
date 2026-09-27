@@ -53,7 +53,13 @@ export default function LoginScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 16 }]}
+      contentContainerStyle={[
+        s.content,
+        {
+          paddingTop: Math.max(insets.top, 20) + 16,
+          paddingBottom: Math.max(insets.bottom, 24) + 24,
+        },
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       {/* Logo */}

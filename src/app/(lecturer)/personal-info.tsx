@@ -81,7 +81,13 @@ export default function LecturerPersonalInfoScreen() {
   return (
     <ScrollView
       style={s.root}
-      contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 12 }]}
+      contentContainerStyle={[
+        s.content,
+        {
+          paddingTop: Math.max(insets.top, 20) + 12,
+          paddingBottom: Math.max(insets.bottom, 24) + 32,
+        },
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       <StatusBar style="light" />

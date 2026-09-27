@@ -56,7 +56,13 @@ export default function CreateCourseScreen() {
   return (
     <ScrollView
       style={s.root}
-      contentContainerStyle={[s.content, { paddingTop: Math.max(insets.top, 20) + 16 }]}
+      contentContainerStyle={[
+        s.content,
+        {
+          paddingTop: Math.max(insets.top, 20) + 16,
+          paddingBottom: Math.max(insets.bottom, 24) + 24,
+        },
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       <StatusBar style={isDark ? "light" : "dark"} />

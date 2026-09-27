@@ -141,7 +141,13 @@ export default function EnrollScreen() {
         <Text style={s.headerTitle}>Enroll in Course</Text>
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
+      >
         {!isPermissionGranted && (
           <View style={s.notifBanner}>
             <View style={s.notifBannerLeft}>

@@ -168,7 +168,13 @@ export default function StudentCourseDetails() {
         </View>
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
+      >
 
         {/* Mark Attendance Card */}
         <Text style={s.sectionTitle}>Mark Attendance</Text>

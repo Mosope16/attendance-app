@@ -3,9 +3,11 @@ import { StatusBar, Platform } from 'react-native';
 import { Tabs, useFocusEffect } from 'expo-router';
 import { LayoutDashboard, BookOpen, QrCode, FileText, User } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LecturerLayout() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Re-apply purple status bar every time a lecturer screen is focused.
   useFocusEffect(
@@ -28,8 +30,9 @@ export default function LecturerLayout() {
           borderTopColor: colors.cardBorder,
           elevation: 0,
           shadowOpacity: 0,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 8,
           backgroundColor: colors.bg,
         },
         tabBarLabelStyle: {

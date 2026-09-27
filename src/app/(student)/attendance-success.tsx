@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CheckCircle } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { formatDate, formatTime } from '../../lib/dateUtils';
 
@@ -10,6 +11,7 @@ const ff = Platform.OS === 'android';
 
 export default function AttendanceSuccessScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const { colors, isDark } = useTheme();
   const PRIMARY = colors.primary;
@@ -18,7 +20,7 @@ export default function AttendanceSuccessScreen() {
   const displayDate = params.timestamp ? params.timestamp : new Date();
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]}>
       <StatusBar style={isDark ? "light" : "dark"} />
       <View style={s.iconBlock}>
         <CheckCircle size={80} color={PRIMARY} />

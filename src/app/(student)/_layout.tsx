@@ -4,9 +4,11 @@ import { Tabs } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { Home, ClipboardCheck, Clock, User } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function StudentLayout() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Re-apply green status bar every time a student screen is focused,
   // preventing purple bleed-in from lecturer screens.
@@ -30,8 +32,9 @@ export default function StudentLayout() {
           borderTopColor: colors.cardBorder,
           elevation: 0,
           shadowOpacity: 0,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 8,
           backgroundColor: colors.bg,
         },
         tabBarLabelStyle: {
