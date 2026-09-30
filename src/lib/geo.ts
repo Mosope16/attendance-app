@@ -30,6 +30,8 @@ export function calculateHaversineDistance(
 
 /**
  * Requests high-accuracy current location for attendance validation.
+ * Uses a robust timeout and fallback to cached GPS/network coordinates
+ * to ensure reliability inside concrete university buildings.
  */
 export async function getCurrentAttendanceLocation(): Promise<{
   coords: { latitude: number; longitude: number; accuracy: number | null } | null;
@@ -52,9 +54,34 @@ export async function getCurrentAttendanceLocation(): Promise<{
       };
     }
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    let location: Location.LocationObject | null = null;
+
+    try {
+      // Attempt fresh high-accuracy satellite fix with an 8s timeout to avoid hanging indoors
+      const locationPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('GPS acquisition timed out')), 8000)
+      );
+
+      location = await Promise.race([locationPromise, timeoutPromise]);
+    } catch (gpsErr) {
+      console.warn('Fresh GPS lock slow or unavailable, attempting last known position:', gpsErr);
+      // Fallback 1: Try recent last known position (cached by OS)
+      location = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
+      // Fallback 2: Try any cached position if recent is not available
+      if (!location) {
+        location = await Location.getLastKnownPositionAsync({});
+      }
+    }
+
+    if (!location) {
+      return {
+        coords: null,
+        error: 'Unable to retrieve your current GPS coordinates. Please check your signal and try again.',
+      };
+    }
 
     return {
       coords: {
