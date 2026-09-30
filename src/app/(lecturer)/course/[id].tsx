@@ -9,6 +9,7 @@ import { useSupabaseClient } from '../../../lib/supabase';
 import { ChevronLeft, Users, QrCode, User, Clock, RefreshCw, Download, MapPin, XCircle } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import { exportCsv } from '../../../lib/exportCsv';
 import QRCode from 'react-native-qrcode-svg';
 import Svg, { Circle } from 'react-native-svg';
@@ -18,6 +19,13 @@ import { formatDate, formatTime } from '../../../lib/dateUtils';
 import { getCurrentAttendanceLocation } from '../../../lib/geo';
 
 const ff = Platform.OS === 'android';
+
+const RADIUS_OPTIONS = [
+  { value: 30, label: '30m', desc: 'Small Lab' },
+  { value: 50, label: '50m', desc: 'Classroom' },
+  { value: 100, label: '100m', desc: 'Large Hall' },
+  { value: 200, label: '200m', desc: 'Auditorium' },
+];
 
 export default function LecturerCourseDetails() {
   const { id } = useLocalSearchParams();
@@ -29,6 +37,7 @@ export default function LecturerCourseDetails() {
 
   const [course, setCourse] = useState<any>(null);
   const [activeSession, setActiveSession] = useState<any>(null);
+  const [selectedRadius, setSelectedRadius] = useState<number>(50);
   const [students, setStudents] = useState<any[]>([]);
   const [presentStudentIds, setPresentStudentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -62,6 +71,9 @@ export default function LecturerCourseDetails() {
         .single();
       
       setActiveSession(sessionData ?? null);
+      if (sessionData?.radius_meters) {
+        setSelectedRadius(sessionData.radius_meters);
+      }
 
       // If active session, fetch attendance records
       if (sessionData) {
@@ -208,14 +220,42 @@ export default function LecturerCourseDetails() {
     const endTime = new Date(Date.now() + 10 * 60000).toISOString();
     const { data, error } = await supabase
       .from('attendance_sessions')
-      .insert({ course_id: id, attendance_code: code, end_time: endTime, latitude, longitude })
+      .insert({
+        course_id: id,
+        attendance_code: code,
+        end_time: endTime,
+        latitude,
+        longitude,
+        radius_meters: selectedRadius,
+      })
       .select()
       .single();
     if (data && !error) {
       setActiveSession(data);
       setPresentStudentIds(new Set());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
       Alert.alert('Error', 'Failed to start session.');
+    }
+  };
+
+  const handleUpdateLiveRadius = async (newRadius: number) => {
+    if (!activeSession) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSelectedRadius(newRadius);
+      setActiveSession((prev: any) => ({ ...prev, radius_meters: newRadius }));
+
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ radius_meters: newRadius })
+        .eq('id', activeSession.id);
+
+      if (error) {
+        console.error('Failed to update live radius:', error);
+      }
+    } catch (e) {
+      console.error('Error updating live radius:', e);
     }
   };
 
@@ -402,9 +442,45 @@ export default function LecturerCourseDetails() {
             </View>
 
             {activeSession.latitude && activeSession.longitude ? (
-              <View style={s.geoBadge}>
-                <MapPin size={13} color={SECONDARY} />
-                <Text style={[s.geoBadgeText, { color: SECONDARY }]}>Geofence Active · 50m Radius</Text>
+              <View style={s.activeGeoBox}>
+                <View style={s.geoBadge}>
+                  <MapPin size={13} color={SECONDARY} />
+                  <Text style={[s.geoBadgeText, { color: SECONDARY }]}>
+                    Geofence: {activeSession.radius_meters || selectedRadius || 50}m Radius
+                  </Text>
+                </View>
+
+                {/* Range Adjuster Buttons */}
+                <View style={s.liveAdjustRow}>
+                  <Text style={s.liveAdjustLabel}>Range:</Text>
+                  <View style={s.liveChipRow}>
+                    {RADIUS_OPTIONS.map((opt) => {
+                      const cur = activeSession.radius_meters || selectedRadius || 50;
+                      const isCur = cur === opt.value;
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          onPress={() => handleUpdateLiveRadius(opt.value)}
+                          style={[
+                            s.liveChip,
+                            isCur
+                              ? { backgroundColor: SECONDARY, borderColor: SECONDARY }
+                              : { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.liveChipText,
+                              isCur ? { color: '#FFFFFF', fontWeight: '700' } : { color: colors.textSub },
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
               </View>
             ) : null}
 
@@ -420,9 +496,54 @@ export default function LecturerCourseDetails() {
             </View>
             <Text style={s.readyTitle}>Ready to Start?</Text>
             <Text style={s.readyBody}>Generate a unique session code for students to enter.</Text>
+
+            {/* Geofence Radius Selector */}
+            <View style={s.venueRadiusBox}>
+              <View style={s.venueRadiusHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={14} color={SECONDARY} />
+                  <Text style={s.venueRadiusTitle}>Venue Geofence Range</Text>
+                </View>
+                <Text style={[s.venueRadiusCurrent, { color: SECONDARY }]}>{selectedRadius}m</Text>
+              </View>
+
+              <View style={s.radiusChipsRow}>
+                {RADIUS_OPTIONS.map((opt) => {
+                  const isSel = selectedRadius === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setSelectedRadius(opt.value);
+                      }}
+                      style={[
+                        s.radiusChip,
+                        isSel
+                          ? { backgroundColor: SECONDARY, borderColor: SECONDARY }
+                          : { backgroundColor: colors.cardAlt, borderColor: colors.cardBorder },
+                      ]}
+                    >
+                      <Text style={[s.radiusChipText, isSel ? { color: '#FFFFFF' } : { color: colors.text }]}>
+                        {opt.label}
+                      </Text>
+                      <Text
+                        style={[
+                          s.radiusChipSub,
+                          isSel ? { color: 'rgba(255,255,255,0.85)' } : { color: colors.textMuted },
+                        ]}
+                      >
+                        {opt.desc}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <Pressable onPress={startSession} style={[s.startBtn, { backgroundColor: SECONDARY }]}>
               <QrCode size={18} color="#FFF" />
-              <Text style={s.startBtnText}>Start Session</Text>
+              <Text style={s.startBtnText}>Start Session ({selectedRadius}m)</Text>
             </Pressable>
           </View>
         )}
@@ -536,6 +657,16 @@ function makeStyles(c: ReturnType<typeof import('../../../context/ThemeContext')
     codeValue: { fontSize: 38, fontWeight: '900', letterSpacing: 10, marginBottom: 8, fontFamily: ff ? 'sans-serif-medium' : undefined },
     timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     timeText: { fontSize: 13, color: c.textMuted, fontFamily: ff ? 'sans-serif' : undefined },
+    activeGeoBox: {
+      width: '100%',
+      backgroundColor: c.cardAlt,
+      borderRadius: 14,
+      padding: 10,
+      marginTop: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.cardBorder,
+    },
     geoBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -543,13 +674,90 @@ function makeStyles(c: ReturnType<typeof import('../../../context/ThemeContext')
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
-      marginTop: 10,
       gap: 6,
     },
     geoBadgeText: {
       fontSize: 12,
       fontWeight: '600',
       fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    liveAdjustRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 8,
+    },
+    liveAdjustLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: c.textMuted,
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    liveChipRow: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    liveChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    liveChipText: {
+      fontSize: 11,
+      fontWeight: '600',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    venueRadiusBox: {
+      width: '100%',
+      backgroundColor: c.cardAlt,
+      borderRadius: 16,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: c.cardBorder,
+    },
+    venueRadiusHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    venueRadiusTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.text,
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    venueRadiusCurrent: {
+      fontSize: 13,
+      fontWeight: '700',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    radiusChipsRow: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    radiusChip: {
+      flex: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radiusChipText: {
+      fontSize: 13,
+      fontWeight: '700',
+      fontFamily: ff ? 'sans-serif-medium' : undefined,
+    },
+    radiusChipSub: {
+      fontSize: 9,
+      marginTop: 2,
+      textAlign: 'center',
+      fontFamily: ff ? 'sans-serif' : undefined,
     },
     endSessionBtn: {
       flexDirection: 'row',

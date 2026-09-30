@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS attendance_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   course_id UUID REFERENCES courses(id) ON DELETE CASCADE NOT NULL,
   attendance_code TEXT NOT NULL,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  radius_meters INTEGER DEFAULT 50,
   start_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   end_time TIMESTAMP WITH TIME ZONE NOT NULL
 );
@@ -91,9 +94,13 @@ CREATE POLICY "Students can enroll themselves" ON enrollments FOR INSERT TO auth
 -- Attendance Sessions Policy
 DROP POLICY IF EXISTS "Anyone can view attendance sessions" ON attendance_sessions;
 DROP POLICY IF EXISTS "Lecturers can create sessions" ON attendance_sessions;
+DROP POLICY IF EXISTS "Lecturers can update their sessions" ON attendance_sessions;
 
 CREATE POLICY "Anyone can view attendance sessions" ON attendance_sessions FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Lecturers can create sessions" ON attendance_sessions FOR INSERT TO authenticated WITH CHECK (
+  EXISTS (SELECT 1 FROM courses WHERE id = course_id AND lecturer_id = (auth.jwt() ->> 'sub'))
+);
+CREATE POLICY "Lecturers can update their sessions" ON attendance_sessions FOR UPDATE TO authenticated USING (
   EXISTS (SELECT 1 FROM courses WHERE id = course_id AND lecturer_id = (auth.jwt() ->> 'sub'))
 );
 

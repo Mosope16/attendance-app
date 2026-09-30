@@ -83,7 +83,7 @@ export default function StudentCourseDetails() {
     const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
-      .select('id, latitude, longitude')
+      .select('id, latitude, longitude, radius_meters')
       .eq('course_id', id)
       .eq('attendance_code', attendanceCode.toUpperCase())
       .gt('end_time', now)
@@ -104,12 +104,13 @@ export default function StudentCourseDetails() {
         return;
       }
 
+      const allowedRadius = (session as any).radius_meters || 50;
       const geo = validateGeofenceProximity(
         locResult.coords.latitude,
         locResult.coords.longitude,
         session.latitude,
         session.longitude,
-        50
+        allowedRadius
       );
 
       if (!geo.isWithin) {
@@ -185,7 +186,7 @@ export default function StudentCourseDetails() {
 
           <View style={s.geoBadge}>
             <MapPin size={13} color={PRIMARY} />
-            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · 50m Radius</Text>
+            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · Dynamic Venue Range</Text>
           </View>
 
           {message.text ? (

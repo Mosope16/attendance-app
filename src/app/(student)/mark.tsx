@@ -77,7 +77,7 @@ export default function MarkAttendanceScreen() {
     const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
-      .select('id, course_id, latitude, longitude, course:course_id(course_code, course_title)')
+      .select('id, course_id, latitude, longitude, radius_meters, course:course_id(course_code, course_title)')
       .eq('attendance_code', attendanceCode.toUpperCase())
       .gt('end_time', now)
       .single();
@@ -118,12 +118,13 @@ export default function MarkAttendanceScreen() {
         return;
       }
 
+      const allowedRadius = (session as any).radius_meters || 50;
       const geo = validateGeofenceProximity(
         locResult.coords.latitude,
         locResult.coords.longitude,
         session.latitude,
         session.longitude,
-        50 // 50 meters classroom boundary
+        allowedRadius
       );
 
       if (!geo.isWithin) {
@@ -240,7 +241,7 @@ export default function MarkAttendanceScreen() {
 
             <View style={s.scanGeoBadge}>
               <MapPin size={12} color="#FFFFFF" />
-              <Text style={s.scanGeoBadgeText}>GPS Geofence Protected · 50m Radius</Text>
+              <Text style={s.scanGeoBadgeText}>GPS Geofence Protected · Dynamic Venue Range</Text>
             </View>
           </View>
 
@@ -297,7 +298,7 @@ export default function MarkAttendanceScreen() {
 
           <View style={s.geoBadge}>
             <MapPin size={13} color={PRIMARY} />
-            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · 50m Max Radius</Text>
+            <Text style={[s.geoBadgeText, { color: PRIMARY }]}>GPS Geofence Protected · Dynamic Venue Range</Text>
           </View>
         </View>
 

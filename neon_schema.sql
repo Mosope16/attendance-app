@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.attendance_sessions (
   attendance_code TEXT NOT NULL,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
+  radius_meters INTEGER DEFAULT 50,
   start_time TIMESTAMPTZ DEFAULT NOW(),
   end_time TIMESTAMPTZ NOT NULL
 );
